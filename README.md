@@ -87,4 +87,3 @@ src/styles.css      all styling
       password recovery**, and a
       shared database so the whole team sees the same board.
 - [ ] v3 — **Vercel**: deploy to a live link for CTG.
-- [ ] Confirm the real project stages with Madhavi (`src/data.js`).
