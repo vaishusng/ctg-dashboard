@@ -23,8 +23,6 @@ Instead of walking to someone's desk:
 - You drag a task from "In Progress" to "Completed" and **everyone else's screen updates in real time**: no refresh, no email, no asking.
 - You leave a comment on a task or post in **team chat**, and it's there for the whole team.
 
-> **Impact:** _[Optional: drop a real number or quote here once the team has used it for a few weeks. Example: "The team now checks the board instead of interrupting each other," or a one-line quote from my supervisor.]_
-
 ## What it looks like
 
 ### The task board
@@ -71,7 +69,7 @@ Two windows, side by side. A change in one appears in the other instantly. This 
 
 ## What I learned
 
-I started this project as a beginner coder. Over the summer I taught myself, one piece at a time:
+I started this project as a intermediate coder. Over the summer I taught myself, one piece at a time:
 
 - How to design a **database** and write SQL to create tables and relationships
 - How **authentication** actually works: why passwords are hashed, and why a public API key can be safe when **Row Level Security** guards the data behind it
@@ -99,4 +97,4 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 ---
 
-*Built by Vaishu, a high school student, during a summer internship at Catalyst Technical Group, 2026.*
+*Built by Vaishu, a rising senior, during a summer internship at Catalyst Technical Group, 2026.*
