@@ -1,6 +1,6 @@
 # CTG Workspace
 
-**A live task-and-project dashboard I built for a real civil engineering firm during my summer internship, so the team could stop tracking hundreds of projects by walking around and asking each other out loud.**
+**A live task management tool I built for a real civil engineering firm during my summer internship, so the team could stop tracking hundreds of projects by walking around and asking each other out loud.**
 
 Built for [Catalyst Technical Group](https://texasctgroup.com), a Houston-based civil engineering consulting firm, where I interned in the summer of 2026.
 
@@ -22,6 +22,8 @@ Instead of walking to someone's desk:
 - You open the **board** and instantly see every task, who it's assigned to, what stage it's in, and whether it's on schedule.
 - You drag a task from "In Progress" to "Completed" and **everyone else's screen updates in real time**: no refresh, no email, no asking.
 - You leave a comment on a task or post in **team chat**, and it's there for the whole team.
+
+The team now checks the dashboard instead of interrupting each other. The task-management tool is actively used by the entire civil enginnering firm.
 
 ## What it looks like
 
