@@ -7,167 +7,245 @@ import ProjectDetail from "./ProjectDetail.jsx";
 import ChatPage from "./ChatPage.jsx";
 import TaskDetail from "./TaskDetail.jsx";
 import ProfilePage from "./ProfilePage.jsx";
-import { SEED, SEED_PROJECTS, DEFAULT_PEOPLE, applyDrop } from "./data.js";
+import { DEFAULT_PEOPLE, applyDrop } from "./data.js";
+import { supabase } from "./supabase.js";
 
 // ---------------------------------------------------------------------------
 // App = the brain. Pages: Home, Tasks, Projects (grid -> project detail),
 // Team Chat, and Profile.
+//
+// EVERYTHING now lives in Supabase (the cloud database), not localStorage:
+//   - tasks & projects are shared tables; "trash" is just a `trashed` flag
+//   - team chat is the messages table
+//   - each person's "clear chat" point is saved on their profile row
+// The pattern for every change: write to the database, then re-load that
+// table so the screen matches. Realtime (set up below) also re-loads when a
+// TEAMMATE changes something — that's how two browsers stay in sync.
+//
 // Archived tasks STAY in the tasks list with archived: true — they're hidden
 // from the board but still count toward project progress (finished work is
 // still work).
 // ---------------------------------------------------------------------------
 
-function load(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
+// Only send real table columns to the database (drop id, created_at, etc.),
+// and turn empty date strings into null (a date column rejects "").
+function cleanTask(t) {
+  const cols = ["title","project","client","stage","priority","progress","hours",
+    "assignees","blocked","starred","archived","trashed","description",
+    "start_date","end_date","comments"];
+  const out = {};
+  for (const k of cols) if (k in t) out[k] = t[k];
+  if (out.start_date === "") out.start_date = null;
+  if (out.end_date === "") out.end_date = null;
+  if ("progress" in out) out.progress = Number(out.progress) || 0;
+  if ("hours" in out) out.hours = Number(out.hours) || 0;
+  return out;
 }
-// Stage merge (per Madhavi): "Review" is now part of "Approval".
-// Also normalizes tasks saved by older versions of the app so missing
-// fields can never crash a newer screen.
-function migrateStages(list) {
-  if (!Array.isArray(list)) return [];
-  return list.map(t => ({
-    ...t,
-    stage: t.stage === "Review" ? "Approval" : t.stage,
-    assignees: Array.isArray(t.assignees) ? t.assignees : [],
-    comments: Array.isArray(t.comments) ? t.comments : [],
-    progress: Number(t.progress) || 0,
-    hours: Number(t.hours) || 0,
-  }));
-}
-function loadAccounts() {
-  try { return JSON.parse(localStorage.getItem("ctg_accounts")) || []; }
-  catch { return []; }
-}
-function saveAccounts(accounts) {
-  localStorage.setItem("ctg_accounts", JSON.stringify(accounts));
+function cleanProject(p) {
+  const cols = ["name","client","color","auto","starred","trashed","due","progress","description"];
+  const out = {};
+  for (const k of cols) if (k in p) out[k] = p[k];
+  if (out.due === "") out.due = null;
+  if ("progress" in out) out.progress = Number(out.progress) || 0;
+  return out;
 }
 
 const PAGES = ["Home", "Projects", "Tasks", "Team Chat"];
 
 export default function App() {
-  const [user, setUser] = useState(() => load("ctg_user", null));
-  const [people, setPeople] = useState(() => load("ctg_people2", DEFAULT_PEOPLE));
-  const [tasks, setTasks] = useState(() => migrateStages(load("ctg_tasks2", SEED)));
-  const [trash, setTrash] = useState(() => migrateStages(load("ctg_trash2", [])));
-  const [projects, setProjects] = useState(() => load("ctg_projects3", SEED_PROJECTS));
-  const [projTrash, setProjTrash] = useState(() => load("ctg_projects_trash2", []));
-  const [messages, setMessages] = useState(() => load("ctg_messages", []));
-  const [chatCleared, setChatCleared] = useState(() => load("ctg_chat_cleared", {}));
+  const [user, setUser] = useState(null);          // set by Supabase auth listener below
+  const [authReady, setAuthReady] = useState(false); // false until we've checked for a session
+  const [people, setPeople] = useState(DEFAULT_PEOPLE);
+
+  // These start empty and fill from the database once you're logged in.
+  const [tasks, setTasks] = useState([]);
+  const [trash, setTrash] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [projTrash, setProjTrash] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [dataReady, setDataReady] = useState(false);
 
   const [page, setPage] = useState("Home");
   const [taskView, setTaskView] = useState({ name: "board" });
   const [projView, setProjView] = useState({ name: "grid" });
 
-  useEffect(() => { localStorage.setItem("ctg_people2", JSON.stringify(people)); }, [people]);
-  useEffect(() => { localStorage.setItem("ctg_tasks2", JSON.stringify(tasks)); }, [tasks]);
-  useEffect(() => { localStorage.setItem("ctg_trash2", JSON.stringify(trash)); }, [trash]);
-  useEffect(() => { localStorage.setItem("ctg_projects3", JSON.stringify(projects)); }, [projects]);
-  useEffect(() => { localStorage.setItem("ctg_projects_trash2", JSON.stringify(projTrash)); }, [projTrash]);
-  useEffect(() => { localStorage.setItem("ctg_messages", JSON.stringify(messages)); }, [messages]);
-  useEffect(() => { localStorage.setItem("ctg_chat_cleared", JSON.stringify(chatCleared)); }, [chatCleared]);
+  // ---- Supabase auth: restore the session on load, and listen for
+  // log in / log out events (Login.jsx triggers these; we react here). ----
   useEffect(() => {
-    if (user) localStorage.setItem("ctg_user", JSON.stringify(user));
-    else localStorage.removeItem("ctg_user");
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) loadUser(session.user);
+      else setAuthReady(true);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) loadUser(session.user);
+      else { setUser(null); setAuthReady(true); }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // ---- Once logged in: load all the data, and subscribe to live changes ----
+  useEffect(() => {
+    if (!user) return;
+    loadTasks();
+    loadProjects();
+    loadMessages();
+    setDataReady(true);
+
+    // Realtime: when anyone changes these tables, re-load them here.
+    const channel = supabase.channel("ctg-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, loadTasks)
+      .on("postgres_changes", { event: "*", schema: "public", table: "projects" }, loadProjects)
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, loadMessages)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  // Pull this person's profile row (name, initials, color...) into `user`.
+  async function loadUser(authUser) {
+    const { data: profile } = await supabase
+      .from("profiles").select("*").eq("id", authUser.id).single();
+    if (profile) {
+      setUser({
+        id: profile.id,
+        name: profile.name,
+        nickname: profile.nickname || "",
+        email: profile.email,
+        initials: profile.initials,
+        color: profile.color,
+        chat_cleared_at: profile.chat_cleared_at || "",
+      });
+      refreshPeople();
+      setPage("Home");
+    }
+    setAuthReady(true);
+  }
+
+  // The people list = everyone with an account, plus the built-in starter
+  // initials (TM/VC/RA/MT) so seed tasks keep their colors pre-signup.
+  async function refreshPeople() {
+    const { data } = await supabase.from("profiles").select("initials,name,color");
+    const merged = [...(data || [])];
+    for (const p of DEFAULT_PEOPLE)
+      if (!merged.some(m => m.initials === p.initials)) merged.push(p);
+    setPeople(merged);
+  }
+
+  // ---- loaders (read from the database into the screen) ----
+  async function loadTasks() {
+    const { data } = await supabase.from("tasks").select("*").order("id");
+    const rows = (data || []).map(t => ({
+      ...t,
+      assignees: Array.isArray(t.assignees) ? t.assignees : [],
+      comments: Array.isArray(t.comments) ? t.comments : [],
+    }));
+    setTasks(rows.filter(t => !t.trashed));
+    setTrash(rows.filter(t => t.trashed));
+  }
+  async function loadProjects() {
+    const { data } = await supabase.from("projects").select("*").order("id");
+    const rows = data || [];
+    setProjects(rows.filter(p => !p.trashed));
+    setProjTrash(rows.filter(p => p.trashed));
+  }
+  async function loadMessages() {
+    const { data } = await supabase.from("messages").select("*").order("ts");
+    setMessages(data || []);
+  }
 
   const firstName = (u) => (u.nickname || u.name.split(" ")[0]);
 
-  // ---- auth ----
-  function handleAuth(account) {
-    setPeople(prev =>
-      prev.some(p => p.initials === account.initials)
-        ? prev
-        : [...prev, { initials: account.initials, name: account.name, color: account.color }]
-    );
-    setUser({
-      name: account.name,
-      nickname: account.nickname || "",
-      email: account.email,
-      initials: account.initials,
-      color: account.color,
-    });
-    setPage("Home");
-  }
-
-  // ---- profile ----
-  function saveProfile({ name, nickname, email, color }) {
-    const emailNorm = email.trim().toLowerCase();
-    if (!name.trim() || !emailNorm) return "Name and email can't be empty.";
+  // ---- profile (saved to the shared profiles table) ----
+  async function saveProfile({ name, nickname, email, color }) {
+    if (!name.trim()) return "Name can't be empty.";
+    if (email.trim().toLowerCase() !== user.email)
+      return "Email changes aren't supported yet — that arrives with a later upgrade.";
     const nick = nickname.trim().split(/\s+/)[0] || "";
-    const accounts = loadAccounts();
-    if (accounts.some(a => a.email === emailNorm && a.email !== user.email))
-      return "That email is already used by another account.";
-    const idx = accounts.findIndex(a => a.email === user.email);
-    if (idx >= 0) {
-      accounts[idx] = { ...accounts[idx], name: name.trim(), nickname: nick, email: emailNorm, color };
-      saveAccounts(accounts);
-    }
-    setPeople(prev => prev.map(p =>
-      p.initials === user.initials ? { ...p, name: name.trim(), color } : p
-    ));
-    setUser({ ...user, name: name.trim(), nickname: nick, email: emailNorm, color });
+    const { error } = await supabase
+      .from("profiles")
+      .update({ name: name.trim(), nickname: nick, color })
+      .eq("id", user.id);
+    if (error) return "Couldn't save your profile — check your connection and try again.";
+    setUser({ ...user, name: name.trim(), nickname: nick, color });
+    refreshPeople();
     return null;
   }
 
-  function changePassword(oldPw, newPw) {
-    const accounts = loadAccounts();
-    const idx = accounts.findIndex(a => a.email === user.email);
-    if (idx < 0 || accounts[idx].password !== oldPw) return "Old password doesn't match.";
-    accounts[idx].password = newPw;
-    saveAccounts(accounts);
+  async function changePassword(oldPw, newPw) {
+    // Verify the old password by quietly re-logging-in with it.
+    const { error: oldErr } = await supabase.auth.signInWithPassword({
+      email: user.email, password: oldPw,
+    });
+    if (oldErr) return "Old password doesn't match.";
+    const { error } = await supabase.auth.updateUser({ password: newPw });
+    if (error) return "Couldn't change the password — try again in a moment.";
     return null;
   }
 
-  // ---- task operations ----
-  const nextTaskId = () => Math.max(0, ...tasks.map(t => t.id), ...trash.map(t => t.id)) + 1;
-  const addTask = (data) => setTasks(prev => [...prev, { ...data, id: nextTaskId() }]);
-  const updateTask = (u) => setTasks(prev => prev.map(t => (t.id === u.id ? u : t)));
-  const dropTask = (id, col) => setTasks(prev => prev.map(t => (t.id === id ? applyDrop(t, col) : t)));
-  const toggleTaskStar = (id) => setTasks(prev => prev.map(t => (t.id === id ? { ...t, starred: !t.starred } : t)));
-  const unarchiveTask = (id) => setTasks(prev => prev.map(t => (t.id === id ? { ...t, archived: false } : t)));
-  function trashTask(id) {
+  // ---- task operations (write to db, then re-load) ----
+  async function addTask(data) {
+    await supabase.from("tasks").insert(cleanTask(data));
+    loadTasks();
+  }
+  async function updateTask(u) {
+    await supabase.from("tasks").update(cleanTask(u)).eq("id", u.id);
+    loadTasks();
+  }
+  async function dropTask(id, col) {
     const t = tasks.find(x => x.id === id);
     if (!t) return;
-    setTrash(prev => [...prev, t]);
-    setTasks(prev => prev.filter(x => x.id !== id));
-    if (taskView.name === "task" && taskView.id === id) setTaskView({ name: "board" });
+    const u = applyDrop(t, col);
+    await supabase.from("tasks").update({ blocked: u.blocked, progress: u.progress }).eq("id", id);
+    loadTasks();
   }
-  function recoverTask(id) {
-    const t = trash.find(x => x.id === id);
+  async function toggleTaskStar(id) {
+    const t = [...tasks, ...trash].find(x => x.id === id);
     if (!t) return;
-    setTasks(prev => [...prev, t]);
-    setTrash(prev => prev.filter(x => x.id !== id));
+    await supabase.from("tasks").update({ starred: !t.starred }).eq("id", id);
+    loadTasks();
   }
-  const purgeTask = (id) => setTrash(prev => prev.filter(x => x.id !== id));
+  async function unarchiveTask(id) {
+    await supabase.from("tasks").update({ archived: false }).eq("id", id);
+    loadTasks();
+  }
+  async function trashTask(id) {
+    await supabase.from("tasks").update({ trashed: true }).eq("id", id);
+    if (taskView.name === "task" && taskView.id === id) setTaskView({ name: "board" });
+    loadTasks();
+  }
+  async function recoverTask(id) {
+    await supabase.from("tasks").update({ trashed: false }).eq("id", id);
+    loadTasks();
+  }
+  async function purgeTask(id) {
+    await supabase.from("tasks").delete().eq("id", id);
+    loadTasks();
+  }
 
   // Bulk actions for the Select mode (and single archive uses it too).
-  function bulkTasks(ids, action) {
-    const idSet = new Set(ids);
-    if (action === "trash") {
-      const moving = tasks.filter(t => idSet.has(t.id));
-      setTrash(prev => [...prev, ...moving]);
-      setTasks(prev => prev.filter(t => !idSet.has(t.id)));
-      if (taskView.name === "task" && idSet.has(taskView.id)) setTaskView({ name: "board" });
-      return;
-    }
-    setTasks(prev => prev.map(t => {
-      if (!idSet.has(t.id)) return t;
-      if (action === "complete") return { ...t, progress: 100, blocked: false };
-      if (action === "block") return { ...t, blocked: true };
-      if (action === "unblock") return { ...t, blocked: false };
-      if (action === "archive") return { ...t, archived: true, progress: 100, blocked: false };
-      return t;
-    }));
+  async function bulkTasks(ids, action) {
+    let patch = null;
+    if (action === "trash")    patch = { trashed: true };
+    if (action === "complete") patch = { progress: 100, blocked: false };
+    if (action === "block")    patch = { blocked: true };
+    if (action === "unblock")  patch = { blocked: false };
+    if (action === "archive")  patch = { archived: true, progress: 100, blocked: false };
+    if (!patch) return;
+    await supabase.from("tasks").update(patch).in("id", ids);
+    if (action === "trash" && taskView.name === "task" && ids.includes(taskView.id))
+      setTaskView({ name: "board" });
+    loadTasks();
   }
 
-  // ---- task comments (the per-task updates feed) ----
+  // ---- task comments (the per-task updates feed, stored on the task) ----
+  async function saveComments(taskId, comments) {
+    await supabase.from("tasks").update({ comments }).eq("id", taskId);
+    loadTasks();
+  }
   function addTaskComment(taskId, text) {
     if (!text.trim()) return;
+    const t = [...tasks, ...trash].find(x => x.id === taskId);
+    if (!t) return;
     const comment = {
       id: Date.now(),
       author: firstName(user),
@@ -176,88 +254,94 @@ export default function App() {
       text: text.trim(),
       ts: new Date().toISOString(),
     };
-    setTasks(prev => prev.map(t =>
-      t.id === taskId ? { ...t, comments: [...(t.comments || []), comment] } : t
-    ));
+    saveComments(taskId, [...(t.comments || []), comment]);
   }
   function editTaskComment(taskId, commentId, text) {
     if (!text.trim()) return;
-    setTasks(prev => prev.map(t =>
-      t.id === taskId
-        ? { ...t, comments: (t.comments || []).map(c => c.id === commentId ? { ...c, text: text.trim(), edited: true } : c) }
-        : t
-    ));
+    const t = [...tasks, ...trash].find(x => x.id === taskId);
+    if (!t) return;
+    const next = (t.comments || []).map(c =>
+      c.id === commentId ? { ...c, text: text.trim(), edited: true } : c);
+    saveComments(taskId, next);
   }
   function deleteTaskComment(taskId, commentId) {
-    setTasks(prev => prev.map(t =>
-      t.id === taskId
-        ? { ...t, comments: (t.comments || []).filter(c => c.id !== commentId) }
-        : t
-    ));
+    const t = [...tasks, ...trash].find(x => x.id === taskId);
+    if (!t) return;
+    saveComments(taskId, (t.comments || []).filter(c => c.id !== commentId));
   }
 
   // ---- project operations ----
-  const nextProjId = () => Math.max(0, ...projects.map(p => p.id), ...projTrash.map(p => p.id)) + 1;
-  const addProject = (data) => setProjects(prev => [...prev, { ...data, id: nextProjId() }]);
-  const updateProject = (u) => setProjects(prev => prev.map(p => (p.id === u.id ? u : p)));
-  const toggleProjectStar = (id) => setProjects(prev => prev.map(p => (p.id === id ? { ...p, starred: !p.starred } : p)));
-  function trashProject(id) {
-    const p = projects.find(x => x.id === id);
+  async function addProject(data) {
+    await supabase.from("projects").insert(cleanProject(data));
+    loadProjects();
+  }
+  async function updateProject(u) {
+    await supabase.from("projects").update(cleanProject(u)).eq("id", u.id);
+    loadProjects();
+  }
+  async function toggleProjectStar(id) {
+    const p = [...projects, ...projTrash].find(x => x.id === id);
     if (!p) return;
-    setProjTrash(prev => [...prev, p]);
-    setProjects(prev => prev.filter(x => x.id !== id));
+    await supabase.from("projects").update({ starred: !p.starred }).eq("id", id);
+    loadProjects();
+  }
+  async function trashProject(id) {
+    await supabase.from("projects").update({ trashed: true }).eq("id", id);
     if (projView.name === "project" && projView.id === id) setProjView({ name: "grid" });
+    loadProjects();
   }
-  function recoverProject(id) {
-    const p = projTrash.find(x => x.id === id);
-    if (!p) return;
-    setProjects(prev => [...prev, p]);
-    setProjTrash(prev => prev.filter(x => x.id !== id));
+  async function recoverProject(id) {
+    await supabase.from("projects").update({ trashed: false }).eq("id", id);
+    loadProjects();
   }
-  const purgeProject = (id) => setProjTrash(prev => prev.filter(x => x.id !== id));
-
-  function bulkProjects(ids, action) {
-    const idSet = new Set(ids);
+  async function purgeProject(id) {
+    await supabase.from("projects").delete().eq("id", id);
+    loadProjects();
+  }
+  async function bulkProjects(ids, action) {
     if (action === "trash") {
-      const moving = projects.filter(p => idSet.has(p.id));
-      setProjTrash(prev => [...prev, ...moving]);
-      setProjects(prev => prev.filter(p => !idSet.has(p.id)));
-      if (projView.name === "project" && idSet.has(projView.id)) setProjView({ name: "grid" });
+      await supabase.from("projects").update({ trashed: true }).in("id", ids);
+      if (projView.name === "project" && ids.includes(projView.id)) setProjView({ name: "grid" });
+      loadProjects();
       return;
     }
     if (action === "done") {
-      setProjects(prev => prev.map(p =>
-        idSet.has(p.id) ? { ...p, auto: false, progress: 100 } : p
-      ));
+      await supabase.from("projects").update({ auto: false, progress: 100 }).in("id", ids);
+      loadProjects();
     }
   }
 
   // ---- chat ----
-  function sendMessage(text) {
+  async function sendMessage(text) {
     if (!text.trim()) return;
-    setMessages(prev => [...prev, {
-      id: Date.now(),
+    // user_id is filled in automatically by the database (= the logged-in user).
+    await supabase.from("messages").insert({
       author: firstName(user),
       initials: user.initials,
       color: user.color,
       text: text.trim(),
-      ts: new Date().toISOString(),
-    }]);
+    });
+    loadMessages();
   }
-  function editMessage(id, text) {
+  async function editMessage(id, text) {
     if (!text.trim()) return;
-    setMessages(prev => prev.map(m => (m.id === id ? { ...m, text: text.trim(), edited: true } : m)));
+    await supabase.from("messages").update({ text: text.trim(), edited: true }).eq("id", id);
+    loadMessages();
   }
-  function deleteMessage(id) {
-    setMessages(prev => prev.filter(m => m.id !== id));
+  async function deleteMessage(id) {
+    await supabase.from("messages").delete().eq("id", id);
+    loadMessages();
   }
-  function clearChat() {
-    setChatCleared(prev => ({ ...prev, [user.initials]: new Date().toISOString() }));
+  async function clearChat() {
+    const now = new Date().toISOString();
+    await supabase.from("profiles").update({ chat_cleared_at: now }).eq("id", user.id);
+    setUser({ ...user, chat_cleared_at: now });
   }
 
-  if (!user) return <Login onAuth={handleAuth} />;
+  if (!authReady) return <div className="login-page"><div className="login-card"><div className="login-mark">C</div><p className="login-sub">Loading...</p></div></div>;
+  if (!user) return <Login />;
 
-  const clearedAt = chatCleared[user.initials] || "";
+  const clearedAt = user.chat_cleared_at || "";
   const visibleMessages = messages.filter(m => m.ts > clearedAt);
 
   const currentTask = taskView.name === "task" ? tasks.find(t => t.id === taskView.id) : null;
@@ -312,7 +396,7 @@ export default function App() {
           <span className="avatar nav-avatar" style={{ background: user.color || "#94a3b8" }}>{user.initials}</span>
           <span className="nav-user">{firstName(user)}</span>
         </button>
-        <button className="btn btn-ghost" onClick={() => setUser(null)}>Log out</button>
+        <button className="btn btn-ghost" onClick={() => supabase.auth.signOut()}>Log out</button>
       </nav>
       <div className="subnav">Workspace &nbsp;/&nbsp; <b>{page}</b></div>
 

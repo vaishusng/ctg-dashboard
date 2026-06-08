@@ -4,8 +4,9 @@ import PasswordMeter from "./PasswordMeter.jsx";
 
 // ---------------------------------------------------------------------------
 // Profile — opened by clicking your name in the nav.
-// Edit your avatar color, name, nickname, or email; change your password
-// (old password required, new one typed twice).
+// Edit your avatar color, name, or nickname; change your password.
+// Saves go to the shared database now, so the handlers are async (we AWAIT
+// the answer from Supabase before showing success/failure).
 // Note: your INITIALS stay fixed even if you rename yourself — they're how
 // your tasks know they belong to you.
 // ---------------------------------------------------------------------------
@@ -17,26 +18,32 @@ export default function ProfilePage({ user, onSave, onChangePassword }) {
   const [email, setEmail] = useState(user.email);
   const [color, setColor] = useState(user.color);
   const [profileMsg, setProfileMsg] = useState(null); // {ok, text}
+  const [savingProfile, setSavingProfile] = useState(false);
 
   // password form
   const [oldPw, setOldPw] = useState("");
   const [newPw1, setNewPw1] = useState("");
   const [newPw2, setNewPw2] = useState("");
   const [pwMsg, setPwMsg] = useState(null);
+  const [savingPw, setSavingPw] = useState(false);
 
-  function submitProfile(e) {
+  async function submitProfile(e) {
     e.preventDefault();
-    const err = onSave({ name, nickname, email, color });
+    setSavingProfile(true);
+    const err = await onSave({ name, nickname, email, color });
+    setSavingProfile(false);
     setProfileMsg(err ? { ok: false, text: err } : { ok: true, text: "Profile saved ✓" });
   }
 
-  function submitPassword(e) {
+  async function submitPassword(e) {
     e.preventDefault();
     if (!oldPw || !newPw1) return setPwMsg({ ok: false, text: "Please fill out every field." });
     if (newPw1 !== newPw2) return setPwMsg({ ok: false, text: "The new passwords don't match — type the same one twice." });
     const pwError = passwordCheck(newPw1);
     if (pwError) return setPwMsg({ ok: false, text: pwError });
-    const err = onChangePassword(oldPw, newPw1);
+    setSavingPw(true);
+    const err = await onChangePassword(oldPw, newPw1);
+    setSavingPw(false);
     if (err) return setPwMsg({ ok: false, text: err });
     setOldPw(""); setNewPw1(""); setNewPw2("");
     setPwMsg({ ok: true, text: "Password changed ✓" });
@@ -72,14 +79,16 @@ export default function ProfilePage({ user, onSave, onChangePassword }) {
             <input value={nickname} onChange={e => setNickname(e.target.value)} placeholder="optional" />
           </label>
           <label className="field">
-            <span>Email</span>
+            <span>Email (changes arrive with a later upgrade)</span>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} />
           </label>
           <p className="profile-note mono">Initials stay {user.initials} — they're how your tasks find you.</p>
           {profileMsg && (
             <div className={profileMsg.ok ? "form-ok" : "login-error"}>{profileMsg.text}</div>
           )}
-          <button type="submit" className="btn btn-primary">💾 Save profile</button>
+          <button type="submit" className="btn btn-primary" disabled={savingProfile}>
+            {savingProfile ? "Saving..." : "💾 Save profile"}
+          </button>
         </form>
 
         {/* ---- password card ---- */}
@@ -101,7 +110,9 @@ export default function ProfilePage({ user, onSave, onChangePassword }) {
           {pwMsg && (
             <div className={pwMsg.ok ? "form-ok" : "login-error"}>{pwMsg.text}</div>
           )}
-          <button type="submit" className="btn btn-primary">Change password</button>
+          <button type="submit" className="btn btn-primary" disabled={savingPw}>
+            {savingPw ? "Changing..." : "Change password"}
+          </button>
         </form>
       </div>
     </main>

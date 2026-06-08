@@ -1,22 +1,21 @@
 import { useState } from "react";
+import { supabase } from "./supabase.js";
 import { EMPLOYEE_CODE, EMPLOYEE_EMAIL_DOMAIN, ALLOWED_TEST_EMAILS, AVATAR_COLORS, initialsFromName, passwordCheck } from "./data.js";
 import PasswordMeter from "./PasswordMeter.jsx";
 
 // ---------------------------------------------------------------------------
-// Screen 1 — Login / Sign up.
+// Screen 1 — Login / Sign up. REAL auth via Supabase.
 //
-// PLACEHOLDER auth so the app works end-to-end today: accounts live in this
-// browser's localStorage (not encrypted, not shared between computers).
-// The Supabase upgrade replaces the storage with real secure auth — and adds
-// "forgot password" emails. The screen itself stays the same.
+// Passwords are hashed and stored by Supabase Auth — they never live in this
+// app's code or database tables. The employee-code and email-domain checks
+// here are just for friendly error messages; the database enforces the same
+// rules server-side, so bypassing this screen gets you nothing.
+//
+// Note: this component doesn't set the logged-in user itself. App.jsx listens
+// for auth changes (onAuthStateChange) and reacts — log in here, App hears it.
 // ---------------------------------------------------------------------------
 
-function loadAccounts() {
-  try { return JSON.parse(localStorage.getItem("ctg_accounts")) || []; }
-  catch { return []; }
-}
-
-export default function Login({ onAuth }) {
+export default function Login() {
   const [tab, setTab] = useState("login"); // "login" | "signup"
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -24,43 +23,60 @@ export default function Login({ onAuth }) {
   const [code, setCode] = useState("");
   const [color, setColor] = useState(AVATAR_COLORS[0]);
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const previewInitials = name.trim() ? initialsFromName(name) : "?";
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault();
     setError("");
-    const accounts = loadAccounts();
+    const emailNorm = email.trim().toLowerCase();
 
     if (tab === "signup") {
-      if (!name.trim() || !email.trim() || !password) return setError("Please fill out every field.");
-      const emailNorm = email.trim().toLowerCase();
+      if (!name.trim() || !emailNorm || !password) return setError("Please fill out every field.");
       if (!emailNorm.endsWith(EMPLOYEE_EMAIL_DOMAIN) && !ALLOWED_TEST_EMAILS.includes(emailNorm))
         return setError(`Sign-ups are restricted to CTG employees — use your ${EMPLOYEE_EMAIL_DOMAIN} email.`);
       if (code.trim() !== EMPLOYEE_CODE) return setError("That employee code isn't valid. Ask Madhavi for the current code.");
       const pwError = passwordCheck(password);
       if (pwError) return setError(pwError);
-      if (accounts.some(a => a.email === email.trim().toLowerCase()))
-        return setError("An account with that email already exists — try logging in.");
-      const account = {
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
+
+      setBusy(true);
+      const { error: signUpError } = await supabase.auth.signUp({
+        email: emailNorm,
         password,
-        color,
-        initials: initialsFromName(name),
-        nickname: "",
-      };
-      localStorage.setItem("ctg_accounts", JSON.stringify([...accounts, account]));
-      onAuth(account);
-    } else {
-      const acc = accounts.find(a => a.email === email.trim().toLowerCase() && a.password === password);
-      if (!acc) return setError("Email or password doesn't match. New here? Sign up with your employee code.");
-      // older accounts may not have a color/initials yet — fill them in
-      onAuth({
-        ...acc,
-        initials: acc.initials || initialsFromName(acc.name),
-        color: acc.color || AVATAR_COLORS[0],
+        options: {
+          // This metadata rides along to the database, where the signup
+          // trigger re-checks the code and creates the profile row.
+          data: {
+            name: name.trim(),
+            nickname: "",
+            initials: initialsFromName(name),
+            color,
+            employee_code: code.trim(),
+          },
+        },
       });
+      setBusy(false);
+      if (signUpError) {
+        const msg = (signUpError.message || "").toLowerCase();
+        if (msg.includes("already registered"))
+          return setError("An account with that email already exists — try logging in.");
+        if (msg.includes("database error"))
+          return setError("The database rejected that signup — double-check your email and employee code.");
+        return setError(signUpError.message);
+      }
+      // Success — App.jsx hears the SIGNED_IN event and takes it from here.
+    } else {
+      if (!emailNorm || !password) return setError("Please fill out every field.");
+      setBusy(true);
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: emailNorm,
+        password,
+      });
+      setBusy(false);
+      if (signInError)
+        return setError("Email or password doesn't match. New here? Sign up with your employee code.");
+      // Success — App.jsx takes it from here.
     }
   }
 
@@ -120,14 +136,14 @@ export default function Login({ onAuth }) {
 
           {error && <div className="login-error">{error}</div>}
 
-          <button type="submit" className="btn btn-primary btn-block">
-            {tab === "login" ? "Log in" : "Create account"}
+          <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
+            {busy ? "One sec..." : tab === "login" ? "Log in" : "Create account"}
           </button>
         </form>
 
         <p className="login-foot">
           {tab === "login"
-            ? "Forgot your password? Reset emails arrive with the secure-login upgrade — for now, create a fresh account."
+            ? "Forgot your password? Reset emails arrive with the next upgrade."
             : <>You'll need the employee code from CTG to create an account.</>}
         </p>
       </div>
