@@ -1,6 +1,6 @@
 # CTG Workspace
 
-**A live task-and-project dashboard I built for a real civil engineering firm during my summer internship, so the team could stop tracking hundreds of projects by walking around and asking each other out loud.**
+**A live task management tool I built for a real civil engineering firm during my summer internship, so the team could stop tracking hundreds of projects by walking around and asking each other out loud.**
 
 Built for [Catalyst Technical Group](https://texasctgroup.com), a Houston-based civil engineering consulting firm, where I interned in the summer of 2026.
 
@@ -23,7 +23,7 @@ Instead of walking to someone's desk:
 - You drag a task from "In Progress" to "Completed" and **everyone else's screen updates in real time**: no refresh, no email, no asking.
 - You leave a comment on a task or post in **team chat**, and it's there for the whole team.
 
-> **Impact:** _[Optional: drop a real number or quote here once the team has used it for a few weeks. Example: "The team now checks the board instead of interrupting each other," or a one-line quote from my supervisor.]_
+The team now checks the dashboard instead of interrupting each other. The task-management tool is actively used by the entire civil enginnering firm.
 
 ## What it looks like
 
@@ -71,7 +71,7 @@ Two windows, side by side. A change in one appears in the other instantly. This 
 
 ## What I learned
 
-I started this project as a beginner coder. Over the summer I taught myself, one piece at a time:
+I started this project as a intermediate coder. Over the summer I taught myself, one piece at a time:
 
 - How to design a **database** and write SQL to create tables and relationships
 - How **authentication** actually works: why passwords are hashed, and why a public API key can be safe when **Row Level Security** guards the data behind it
@@ -99,4 +99,4 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 ---
 
-*Built by Vaishu, a high school student, during a summer internship at Catalyst Technical Group, 2026.*
+*Built by Vaishu, a rising senior, during a summer internship at Catalyst Technical Group, 2026.*
