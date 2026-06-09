@@ -7,7 +7,7 @@ import { fmtDate, effectiveProgress } from "./data.js";
 // Select mode: pick several projects, then mark them Done or Trash them.
 // ---------------------------------------------------------------------------
 
-export default function ProjectsPage({ projects, tasks, trash, onOpen, onAdd, onUpdate, onStar, onTrash, onRecover, onPurge, onBulk }) {
+export default function ProjectsPage({ projects, tasks, trash, people = [], onOpen, onAdd, onUpdate, onStar, onTrash, onRecover, onPurge, onBulk }) {
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState("Delivery date");
   const [sortDir, setSortDir] = useState("High to Low");
@@ -28,6 +28,11 @@ export default function ProjectsPage({ projects, tasks, trash, onOpen, onAdd, on
     if (selected.length) onBulk(selected, action);
     exitSelect();
   }
+
+  // ---- trash select mode ----
+  const [trashMode, setTrashMode] = useState(false);
+  const [trashSel, setTrashSel] = useState([]);
+  const toggleTrash = (id) => setTrashSel(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
 
   const clients = useMemo(
     () => [...new Set(projects.map(p => p.client))].sort(),
@@ -142,6 +147,8 @@ export default function ProjectsPage({ projects, tasks, trash, onOpen, onAdd, on
         <div className="bulk-bar">
           <span className="bulk-count mono">{selected.length} selected</span>
           <span className="bulk-hint">Click projects to select them, then:</span>
+          <button className="btn" onClick={() => setSelected(visible.map(p => p.id))}>Select all</button>
+          <button className="btn" disabled={!selected.length} onClick={() => setSelected([])}>Clear</button>
           <button className="btn" disabled={!selected.length} onClick={() => runBulk("done")}>✓ Mark done</button>
           <button className="btn btn-danger" disabled={!selected.length} onClick={() => runBulk("trash")}>🗑 Trash</button>
           <button className="btn" onClick={exitSelect}>Cancel</button>
@@ -212,16 +219,36 @@ export default function ProjectsPage({ projects, tasks, trash, onOpen, onAdd, on
         {trashOpen && (
           <div className="trash-list">
             {trash.length === 0 && <div className="col-empty">Trash is empty.</div>}
+            {trash.length > 0 && (
+              <div className="bulk-bar">
+                <button className={trashMode ? "btn btn-primary" : "btn"}
+                  onClick={() => { setTrashMode(m => !m); setTrashSel([]); }}>☑ Select</button>
+                {trashMode && <>
+                  <span className="bulk-count mono">{trashSel.length} selected</span>
+                  <button className="btn" onClick={() => setTrashSel(trash.map(p => p.id))}>Select all</button>
+                  <button className="btn" disabled={!trashSel.length} onClick={() => setTrashSel([])}>Clear</button>
+                  <button className="btn" disabled={!trashSel.length}
+                    onClick={() => { onBulk(trashSel, "recover"); setTrashSel([]); }}>Recover</button>
+                  <button className="btn btn-danger" disabled={!trashSel.length}
+                    onClick={() => { onBulk(trashSel, "purge"); setTrashSel([]); }}>Delete forever</button>
+                </>}
+              </div>
+            )}
             {trash.map(p => (
-              <div key={p.id} className="trash-row">
+              <div key={p.id}
+                className={"trash-row" + (trashMode ? " trash-row-selectable" : "") + (trashSel.includes(p.id) ? " trash-row-selected" : "")}
+                onClick={trashMode ? () => toggleTrash(p.id) : undefined}>
                 <div>
+                  {trashMode && <span className={"card-checkbox" + (trashSel.includes(p.id) ? " on" : "")}>{trashSel.includes(p.id) ? "✓" : ""}</span>}
                   <b>{p.name}</b>
                   <span className="trash-proj"> — {p.client}</span>
                 </div>
-                <div className="trash-actions">
-                  <button className="btn" onClick={() => onRecover(p.id)}>Recover</button>
-                  <button className="btn btn-danger" onClick={() => onPurge(p.id)}>Delete forever</button>
-                </div>
+                {!trashMode && (
+                  <div className="trash-actions">
+                    <button className="btn" onClick={() => onRecover(p.id)}>Recover</button>
+                    <button className="btn btn-danger" onClick={() => onPurge(p.id)}>Delete forever</button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -231,6 +258,7 @@ export default function ProjectsPage({ projects, tasks, trash, onOpen, onAdd, on
       {modal !== null && (
         <ProjectModal
           initial={modal === "new" ? null : modal}
+          people={people}
           autoValue={modal === "new" ? null : effectiveProgress({ ...modal, auto: true }, tasks)}
           onClose={() => setModal(null)}
           onSave={(clean) => (modal === "new" ? onAdd(clean) : onUpdate(clean))}

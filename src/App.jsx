@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Login from "./Login.jsx";
 import HomePage from "./HomePage.jsx";
 import Board from "./Board.jsx";
@@ -31,7 +31,7 @@ import { supabase } from "./supabase.js";
 // and turn empty date strings into null (a date column rejects "").
 function cleanTask(t) {
   const cols = ["title","project","client","stage","priority","progress","hours",
-    "assignees","blocked","starred","archived","trashed","description",
+    "type","assignees","blocked","starred","archived","trashed","description",
     "start_date","end_date","comments"];
   const out = {};
   for (const k of cols) if (k in t) out[k] = t[k];
@@ -42,7 +42,8 @@ function cleanTask(t) {
   return out;
 }
 function cleanProject(p) {
-  const cols = ["name","client","color","auto","starred","trashed","due","progress","description"];
+  const cols = ["name","client","color","auto","starred","trashed","due","progress","description",
+    "manager","assignees","updates_text","roadblocks_text"];
   const out = {};
   for (const k of cols) if (k in p) out[k] = p[k];
   if (out.due === "") out.due = null;
@@ -63,22 +64,50 @@ export default function App() {
   const [projects, setProjects] = useState([]);
   const [projTrash, setProjTrash] = useState([]);
   const [messages, setMessages] = useState([]);
+  const [milestones, setMilestones] = useState([]);
+  const [decisions, setDecisions] = useState([]);
+  const [projectNotes, setProjectNotes] = useState([]);
   const [dataReady, setDataReady] = useState(false);
 
-  const [page, setPage] = useState("Home");
-  const [taskView, setTaskView] = useState({ name: "board" });
-  const [projView, setProjView] = useState({ name: "grid" });
+  // Remember which screen you were on across tab switches, new tabs, and
+  // reloads by saving it in the browser. Falls back to defaults first time.
+  const [page, setPage] = useState(() => {
+    try { return localStorage.getItem("ctg_page") || "Home"; } catch { return "Home"; }
+  });
+  const [taskView, setTaskView] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("ctg_taskview")) || { name: "board" }; }
+    catch { return { name: "board" }; }
+  });
+  const [projView, setProjView] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("ctg_projview")) || { name: "grid" }; }
+    catch { return { name: "grid" }; }
+  });
+  useEffect(() => { localStorage.setItem("ctg_page", page); }, [page]);
+  useEffect(() => { localStorage.setItem("ctg_taskview", JSON.stringify(taskView)); }, [taskView]);
+  useEffect(() => { localStorage.setItem("ctg_projview", JSON.stringify(projView)); }, [projView]);
 
-  // ---- Supabase auth: restore the session on load, and listen for
-  // log in / log out events (Login.jsx triggers these; we react here). ----
+  // Mirror of `user` we can read synchronously inside the auth listener.
+  // Lets us tell a genuine new sign-in (user was null) apart from a
+  // background token refresh on tab refocus (user already set).
+  const userRef = useRef(null);
+  useEffect(() => { userRef.current = user; }, [user]);
+
+  // ---- Supabase auth: react to log in / log out events. ----
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) loadUser(session.user);
-      else setAuthReady(true);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) loadUser(session.user);
-      else { setUser(null); setAuthReady(true); }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) {            // logged out, or no session on first load
+        setUser(null);
+        setAuthReady(true);
+        return;
+      }
+      // Load the profile only the FIRST time we see a session this page-load.
+      // Switching tabs/coming back fires this again, but userRef is already
+      // set, so we skip. We never force a screen here; the saved screen
+      // (above) is restored, so you stay exactly where you were.
+      if (!userRef.current) {
+        loadUser(session.user);
+      }
+      setAuthReady(true);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -89,6 +118,9 @@ export default function App() {
     loadTasks();
     loadProjects();
     loadMessages();
+    loadMilestones();
+    loadDecisions();
+    loadProjectNotes();
     setDataReady(true);
 
     // Realtime: when anyone changes these tables, re-load them here.
@@ -96,6 +128,9 @@ export default function App() {
       .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, loadTasks)
       .on("postgres_changes", { event: "*", schema: "public", table: "projects" }, loadProjects)
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, loadMessages)
+      .on("postgres_changes", { event: "*", schema: "public", table: "milestones" }, loadMilestones)
+      .on("postgres_changes", { event: "*", schema: "public", table: "decisions" }, loadDecisions)
+      .on("postgres_changes", { event: "*", schema: "public", table: "project_notes" }, loadProjectNotes)
       .subscribe();
     return () => supabase.removeChannel(channel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -116,7 +151,6 @@ export default function App() {
         chat_cleared_at: profile.chat_cleared_at || "",
       });
       refreshPeople();
-      setPage("Home");
     }
     setAuthReady(true);
   }
@@ -151,6 +185,66 @@ export default function App() {
   async function loadMessages() {
     const { data } = await supabase.from("messages").select("*").order("ts");
     setMessages(data || []);
+  }
+  async function loadMilestones() {
+    const { data } = await supabase.from("milestones").select("*").order("due", { nullsFirst: false });
+    setMilestones(data || []);
+  }
+  async function loadDecisions() {
+    const { data } = await supabase.from("decisions").select("*").order("created_at");
+    setDecisions(data || []);
+  }
+
+  // ---- milestones ----
+  async function addMilestone(m) {
+    await supabase.from("milestones").insert(m);
+    loadMilestones();
+  }
+  async function updateMilestone(id, patch) {
+    await supabase.from("milestones").update(patch).eq("id", id);
+    loadMilestones();
+  }
+  async function deleteMilestone(id) {
+    await supabase.from("milestones").delete().eq("id", id);
+    loadMilestones();
+  }
+
+  // ---- decisions ----
+  async function addDecision(d) {
+    await supabase.from("decisions").insert(d);
+    loadDecisions();
+  }
+  async function updateDecision(id, patch) {
+    await supabase.from("decisions").update(patch).eq("id", id);
+    loadDecisions();
+  }
+  async function deleteDecision(id) {
+    await supabase.from("decisions").delete().eq("id", id);
+    loadDecisions();
+  }
+
+  // ---- project notes (chat-style Updates & Roadblocks feeds) ----
+  async function loadProjectNotes() {
+    const { data } = await supabase.from("project_notes").select("*").order("ts");
+    setProjectNotes(data || []);
+  }
+  async function addProjectNote({ project_id, kind, text }) {
+    if (!text.trim()) return;
+    await supabase.from("project_notes").insert({
+      project_id, kind,
+      author: firstName(user), initials: user.initials, color: user.color,
+      text: text.trim(),
+    });
+    loadProjectNotes();
+  }
+  async function editProjectNote(id, text) {
+    if (!text.trim()) return;
+    await supabase.from("project_notes").update({ text: text.trim(), edited: true }).eq("id", id);
+    loadProjectNotes();
+  }
+  async function deleteProjectNote(id) {
+    await supabase.from("project_notes").delete().eq("id", id);
+    loadProjectNotes();
   }
 
   const firstName = (u) => (u.nickname || u.name.split(" ")[0]);
@@ -224,12 +318,20 @@ export default function App() {
 
   // Bulk actions for the Select mode (and single archive uses it too).
   async function bulkTasks(ids, action) {
+    if (!ids || !ids.length) return;
+    if (action === "purge") {  // delete forever from trash
+      await supabase.from("tasks").delete().in("id", ids);
+      loadTasks();
+      return;
+    }
     let patch = null;
-    if (action === "trash")    patch = { trashed: true };
-    if (action === "complete") patch = { progress: 100, blocked: false };
-    if (action === "block")    patch = { blocked: true };
-    if (action === "unblock")  patch = { blocked: false };
-    if (action === "archive")  patch = { archived: true, progress: 100, blocked: false };
+    if (action === "trash")     patch = { trashed: true };
+    if (action === "recover")   patch = { trashed: false };
+    if (action === "complete")  patch = { progress: 100, blocked: false };
+    if (action === "block")     patch = { blocked: true };
+    if (action === "unblock")   patch = { blocked: false };
+    if (action === "archive")   patch = { archived: true, progress: 100, blocked: false };
+    if (action === "unarchive") patch = { archived: false };
     if (!patch) return;
     await supabase.from("tasks").update(patch).in("id", ids);
     if (action === "trash" && taskView.name === "task" && ids.includes(taskView.id))
@@ -299,9 +401,20 @@ export default function App() {
     loadProjects();
   }
   async function bulkProjects(ids, action) {
+    if (!ids || !ids.length) return;
+    if (action === "purge") {  // delete forever from trash
+      await supabase.from("projects").delete().in("id", ids);
+      loadProjects();
+      return;
+    }
     if (action === "trash") {
       await supabase.from("projects").update({ trashed: true }).in("id", ids);
       if (projView.name === "project" && ids.includes(projView.id)) setProjView({ name: "grid" });
+      loadProjects();
+      return;
+    }
+    if (action === "recover") {
+      await supabase.from("projects").update({ trashed: false }).in("id", ids);
       loadProjects();
       return;
     }
@@ -398,7 +511,19 @@ export default function App() {
         </button>
         <button className="btn btn-ghost" onClick={() => supabase.auth.signOut()}>Log out</button>
       </nav>
-      <div className="subnav">Workspace &nbsp;/&nbsp; <b>{page}</b></div>
+      <div className="subnav">
+        {(() => {
+          const trail = ["Workspace", page];
+          if (page === "Projects" && currentProject) trail.push(currentProject.name);
+          if (currentTask && taskView.name === "task") trail.push(currentTask.title);
+          return trail.map((part, i) => (
+            <span key={i}>
+              {i > 0 && <>&nbsp;/&nbsp;</>}
+              {i === trail.length - 1 ? <b>{part}</b> : part}
+            </span>
+          ));
+        })()}
+      </div>
 
       {page === "Home" && (
         <HomePage
@@ -439,6 +564,19 @@ export default function App() {
               tasks={tasks}
               people={people}
               projects={projects}
+              milestones={milestones.filter(m => m.project_id === currentProject.id)}
+              decisions={decisions.filter(d => d.project_id === currentProject.id)}
+              projectNotes={projectNotes.filter(n => n.project_id === currentProject.id)}
+              user={user}
+              onAddMilestone={(m) => addMilestone({ ...m, project_id: currentProject.id })}
+              onUpdateMilestone={updateMilestone}
+              onDeleteMilestone={deleteMilestone}
+              onAddDecision={(d) => addDecision({ ...d, project_id: currentProject.id })}
+              onUpdateDecision={updateDecision}
+              onDeleteDecision={deleteDecision}
+              onAddNote={(kind, text) => addProjectNote({ project_id: currentProject.id, kind, text })}
+              onEditNote={editProjectNote}
+              onDeleteNote={deleteProjectNote}
               onOpenTask={(id) => setTaskView({ name: "task", id, mode: "view" })}
               onAddTask={addTask}
               onBack={() => setProjView({ name: "grid" })}
@@ -452,6 +590,7 @@ export default function App() {
               projects={projects}
               tasks={tasks}
               trash={projTrash}
+              people={people}
               onOpen={(id) => setProjView({ name: "project", id })}
               onAdd={addProject}
               onUpdate={updateProject}

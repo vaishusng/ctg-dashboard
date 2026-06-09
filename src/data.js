@@ -35,6 +35,18 @@ export const PRIORITY_COLOR = { high: "#dc2626", med: "#f59e0b", low: "#94a3b8" 
 export const PRIORITIES = ["high", "med", "low"];
 export const PRIORITY_RANK = { high: 3, med: 2, low: 1 };
 
+// Task discipline types. Inside a project, the task board is grouped into
+// these columns. Required when creating a task.
+export const TASK_TYPES = ["Architectural", "Civil", "Structural", "MEP", "Permitting", "Admin"];
+export const TASK_TYPE_COLOR = {
+  Architectural: "#6366f1",
+  Civil: "#0891b2",
+  Structural: "#b45309",
+  MEP: "#16a34a",
+  Permitting: "#db2777",
+  Admin: "#64748b",
+};
+
 // Avatar background colors a new employee can pick from at signup.
 export const AVATAR_COLORS = [
   "#0ea5e9", "#f97316", "#8b5cf6", "#10b981",

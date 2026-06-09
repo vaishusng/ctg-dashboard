@@ -1,10 +1,16 @@
-import { useMemo, useState } from "react";
-import { STAGES, PRIORITIES } from "./data.js";
+import { useEffect, useMemo, useState } from "react";
+import { STAGES, PRIORITIES, TASK_TYPES } from "./data.js";
+
+// Where the half-finished form is saved so you don't lose it if you close it.
+const DRAFT_KEY = "ctg_task_draft_v1";
+function loadDraft() {
+  try { return JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch { return null; }
+}
 
 // ---------------------------------------------------------------------------
-// Shared "New task" modal. Only TITLE, PROJECT, and CLIENT are required —
-// everything else is optional. Used by the Task Dashboard and (with the
-// project locked) from inside a project's page.
+// Shared "New task" modal. Only TITLE, PROJECT, CLIENT, and TYPE are required.
+// As you type, your progress is saved to the browser — close it and reopen and
+// your half-filled form comes back. It clears once the task is actually added.
 // ---------------------------------------------------------------------------
 
 export default function TaskModal({ people, projects, lockedProject = null, onAdd, onClose }) {
@@ -12,14 +18,36 @@ export default function TaskModal({ people, projects, lockedProject = null, onAd
   const clientNames = useMemo(() => [...new Set(projects.map(p => p.client))].sort(), [projects]);
 
   const locked = lockedProject && projects.find(p => p.name === lockedProject);
-  const [draft, setDraft] = useState({
+  const blankDraft = {
     title: "", description: "",
     project: locked ? locked.name : "",
     client: locked ? locked.client : "",
     stage: STAGES[0], priority: "med", progress: 0, hours: 0,
+    type: "",
     assignees: [], blocked: false, start_date: "", end_date: "",
+  };
+  const [draft, setDraft] = useState(() => {
+    const saved = loadDraft();
+    const merged = saved ? { ...blankDraft, ...saved } : blankDraft;
+    // If opened from inside a project, always lock to that project/client.
+    if (locked) { merged.project = locked.name; merged.client = locked.client; }
+    return merged;
   });
   const [error, setError] = useState("");
+
+  // Save the form to the browser whenever it changes.
+  useEffect(() => {
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* ignore */ }
+  }, [draft]);
+
+  function clearDraft() {
+    try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+  }
+  function discardForm() {
+    clearDraft();
+    setDraft(blankDraft);
+    setError("");
+  }
 
   function pickProject(name) {
     const proj = projects.find(p => p.name === name);
@@ -42,12 +70,15 @@ export default function TaskModal({ people, projects, lockedProject = null, onAd
       return setError("Choose one of the established projects.");
     if (!clientNames.includes(draft.client))
       return setError("Choose one of the established clients.");
+    if (!TASK_TYPES.includes(draft.type))
+      return setError("Choose the type of task (Architectural, Civil, Structural, MEP, Permitting, or Admin).");
     onAdd({
       ...draft,
       title: draft.title.trim(),
       progress: Number(draft.progress),
       hours: Number(draft.hours),
     });
+    clearDraft();
     onClose();
   }
 
@@ -78,6 +109,13 @@ export default function TaskModal({ people, projects, lockedProject = null, onAd
             <select value={draft.client} onChange={e => setDraft({ ...draft, client: e.target.value })}>
               <option value="">— choose a client —</option>
               {clientNames.map(c => <option key={c}>{c}</option>)}
+            </select>
+          </label>
+          <label className="field">
+            <span>Type <span className="req">*</span></span>
+            <select value={draft.type} onChange={e => setDraft({ ...draft, type: e.target.value })}>
+              <option value="">— choose a type —</option>
+              {TASK_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
           </label>
           <label className="field">
@@ -134,6 +172,8 @@ export default function TaskModal({ people, projects, lockedProject = null, onAd
         </div>
         {error && <div className="login-error" style={{ marginTop: 12 }}>{error}</div>}
         <div className="modal-actions">
+          <span className="draft-hint">Your progress is saved if you close this.</span>
+          <button type="button" className="btn" onClick={discardForm}>Discard</button>
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
           <button type="submit" className="btn btn-primary" disabled={projectNames.length === 0}>Add task</button>
         </div>

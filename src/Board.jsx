@@ -26,7 +26,7 @@ export default function Board({ tasks, trash, people, projects, onOpen, onDrop, 
   const [dragOverCol, setDragOverCol] = useState(null);
   const draggedId = useRef(null);
 
-  // ---- select mode ----
+  // ---- select mode (main board) ----
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState([]);
   function toggleSelected(id) {
@@ -37,6 +37,14 @@ export default function Board({ tasks, trash, people, projects, onOpen, onDrop, 
     if (selected.length) onBulk(selected, action);
     exitSelect();
   }
+
+  // ---- select mode (archive + trash sections) ----
+  const [archMode, setArchMode] = useState(false);
+  const [archSel, setArchSel] = useState([]);
+  const [trashMode, setTrashMode] = useState(false);
+  const [trashSel, setTrashSel] = useState([]);
+  const toggleArch = (id) => setArchSel(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+  const toggleTrash = (id) => setTrashSel(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
 
   const active = tasks.filter(t => !t.archived);
   const archived = tasks.filter(t => t.archived);
@@ -158,6 +166,8 @@ export default function Board({ tasks, trash, people, projects, onOpen, onDrop, 
         <div className="bulk-bar">
           <span className="bulk-count mono">{selected.length} selected</span>
           <span className="bulk-hint">Click cards to select them, then:</span>
+          <button className="btn" onClick={() => setSelected(visible.map(t => t.id))}>Select all</button>
+          <button className="btn" disabled={!selected.length} onClick={() => setSelected([])}>Clear</button>
           <button className="btn" disabled={!selected.length} onClick={() => runBulk("complete")}>✓ Complete</button>
           <button className="btn" disabled={!selected.length} onClick={() => runBulk("block")}>⛔ Block</button>
           <button className="btn" disabled={!selected.length} onClick={() => runBulk("unblock")}>Unblock</button>
@@ -229,16 +239,36 @@ export default function Board({ tasks, trash, people, projects, onOpen, onDrop, 
             {archived.length === 0 && (
               <div className="col-empty">Nothing archived yet — finish a task and hit 📦 to file it here.</div>
             )}
+            {archived.length > 0 && (
+              <div className="bulk-bar">
+                <button className={archMode ? "btn btn-primary" : "btn"}
+                  onClick={() => { setArchMode(m => !m); setArchSel([]); }}>☑ Select</button>
+                {archMode && <>
+                  <span className="bulk-count mono">{archSel.length} selected</span>
+                  <button className="btn" onClick={() => setArchSel(archived.map(t => t.id))}>Select all</button>
+                  <button className="btn" disabled={!archSel.length} onClick={() => setArchSel([])}>Clear</button>
+                  <button className="btn" disabled={!archSel.length}
+                    onClick={() => { onBulk(archSel, "unarchive"); setArchSel([]); }}>Unarchive</button>
+                  <button className="btn btn-danger" disabled={!archSel.length}
+                    onClick={() => { onBulk(archSel, "trash"); setArchSel([]); }}>🗑 Trash</button>
+                </>}
+              </div>
+            )}
             {archived.map(t => (
-              <div key={t.id} className="trash-row">
+              <div key={t.id}
+                className={"trash-row" + (archMode ? " trash-row-selectable" : "") + (archSel.includes(t.id) ? " trash-row-selected" : "")}
+                onClick={archMode ? () => toggleArch(t.id) : undefined}>
                 <div>
+                  {archMode && <span className={"card-checkbox" + (archSel.includes(t.id) ? " on" : "")}>{archSel.includes(t.id) ? "✓" : ""}</span>}
                   <span className="mono trash-id">TK:{t.id}</span> {t.title}
                   <span className="trash-proj"> — {t.project}</span>
                 </div>
-                <div className="trash-actions">
-                  <button className="btn" onClick={() => onUnarchive(t.id)}>Unarchive</button>
-                  <button className="btn btn-danger" onClick={() => onTrash(t.id)}>🗑 Trash</button>
-                </div>
+                {!archMode && (
+                  <div className="trash-actions">
+                    <button className="btn" onClick={() => onUnarchive(t.id)}>Unarchive</button>
+                    <button className="btn btn-danger" onClick={() => onTrash(t.id)}>🗑 Trash</button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -253,16 +283,36 @@ export default function Board({ tasks, trash, people, projects, onOpen, onDrop, 
         {trashOpen && (
           <div className="trash-list">
             {trash.length === 0 && <div className="col-empty">Trash is empty.</div>}
+            {trash.length > 0 && (
+              <div className="bulk-bar">
+                <button className={trashMode ? "btn btn-primary" : "btn"}
+                  onClick={() => { setTrashMode(m => !m); setTrashSel([]); }}>☑ Select</button>
+                {trashMode && <>
+                  <span className="bulk-count mono">{trashSel.length} selected</span>
+                  <button className="btn" onClick={() => setTrashSel(trash.map(t => t.id))}>Select all</button>
+                  <button className="btn" disabled={!trashSel.length} onClick={() => setTrashSel([])}>Clear</button>
+                  <button className="btn" disabled={!trashSel.length}
+                    onClick={() => { onBulk(trashSel, "recover"); setTrashSel([]); }}>Recover</button>
+                  <button className="btn btn-danger" disabled={!trashSel.length}
+                    onClick={() => { onBulk(trashSel, "purge"); setTrashSel([]); }}>Delete forever</button>
+                </>}
+              </div>
+            )}
             {trash.map(t => (
-              <div key={t.id} className="trash-row">
+              <div key={t.id}
+                className={"trash-row" + (trashMode ? " trash-row-selectable" : "") + (trashSel.includes(t.id) ? " trash-row-selected" : "")}
+                onClick={trashMode ? () => toggleTrash(t.id) : undefined}>
                 <div>
+                  {trashMode && <span className={"card-checkbox" + (trashSel.includes(t.id) ? " on" : "")}>{trashSel.includes(t.id) ? "✓" : ""}</span>}
                   <span className="mono trash-id">TK:{t.id}</span> {t.title}
                   <span className="trash-proj"> — {t.project}</span>
                 </div>
-                <div className="trash-actions">
-                  <button className="btn" onClick={() => onRecover(t.id)}>Recover</button>
-                  <button className="btn btn-danger" onClick={() => onPurge(t.id)}>Delete forever</button>
-                </div>
+                {!trashMode && (
+                  <div className="trash-actions">
+                    <button className="btn" onClick={() => onRecover(t.id)}>Recover</button>
+                    <button className="btn btn-danger" onClick={() => onPurge(t.id)}>Delete forever</button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

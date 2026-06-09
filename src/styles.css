@@ -556,9 +556,15 @@ body {
   padding: 24px 28px;
   margin: 16px 0 20px;
   box-shadow: 0 2px 10px rgba(15,23,42,.08);
-  display: flex; justify-content: space-between; gap: 28px;
-  flex-wrap: wrap;
+  display: flex; flex-direction: column; gap: 0;
 }
+.pd-header-top { display: flex; justify-content: space-between; gap: 28px; flex-wrap: wrap; }
+.pd-header-info {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 28px;
+  margin-top: 18px; padding-top: 16px; border-top: 1px solid #eef2f7;
+}
+.pd-hcell-title { margin: 0 0 8px; font-size: 1rem; color: #0f172a; }
+@media (max-width: 760px) { .pd-header-info { grid-template-columns: 1fr; } }
 .pd-left { flex: 1; min-width: 260px; }
 .pd-title { margin: 2px 0 12px; font-size: 28px; font-weight: 800; overflow-wrap: anywhere; }
 .pd-count {
@@ -828,3 +834,133 @@ body {
 /* Screen 3: updates panel and task card share the same height */
 .detail-grid { align-items: stretch; }
 .tc-panel { max-height: none; min-height: 380px; }
+
+/* ---- project detail: view tabs + overview cards (Batch 2) ---- */
+.pd-tabs { display: flex; gap: 6px; margin: 18px 0 16px; }
+.pd-overview { display: flex; flex-direction: column; gap: 16px; }
+.pd-overview > .full { width: 100%; }
+.pd-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.pd-col { display: flex; flex-direction: column; gap: 16px; }
+@media (max-width: 900px) { .pd-cols { grid-template-columns: 1fr; } }
+.pd-card {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 14px;
+  padding: 18px 20px; box-shadow: 0 1px 2px rgba(15,23,42,.04);
+}
+.pd-card h2 { margin: 0 0 6px; font-size: 1.05rem; color: #0f172a; }
+.pd-hint { margin: 0 0 8px; font-size: .82rem; color: #64748b; }
+.pd-textarea {
+  width: 100%; box-sizing: border-box; resize: vertical;
+  border: 1px solid #cbd5e1; border-radius: 10px; padding: 10px 12px;
+  font: inherit; font-size: .92rem; background: #f8fafc;
+}
+.pd-textarea:focus { outline: none; border-color: #2563eb; background: #fff; }
+.pd-save-row { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 12px; }
+.pd-team-row { display: flex; gap: 40px; flex-wrap: wrap; }
+.pd-label { font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; }
+.pd-person { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: #0f172a; }
+.pd-muted { color: #94a3b8; font-size: .9rem; }
+
+/* ---- selectable rows in trash/archive (Batch 3) ---- */
+.trash-row-selectable { cursor: pointer; }
+.trash-row-selectable:hover { background: #f1f5f9; }
+.trash-row-selected { background: #eff6ff; outline: 2px solid #2563eb; outline-offset: -2px; }
+.trash-row .card-checkbox {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid #cbd5e1;
+  margin-right: 8px; font-size: .7rem; vertical-align: middle; background: #fff;
+}
+.trash-row .card-checkbox.on { background: #2563eb; border-color: #2563eb; color: #fff; }
+
+/* ---- timeline (Batch 4) ---- */
+.timeline { position: relative; display: flex; gap: 28px; overflow-x: auto; padding: 14px 4px 4px; }
+.timeline-line { position: absolute; left: 4px; right: 4px; top: 22px; height: 2px; background: #e2e8f0; }
+.timeline-node { position: relative; min-width: 120px; display: flex; flex-direction: column; align-items: center; z-index: 1; }
+.timeline-dot { width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 3px solid #cbd5e1; margin-bottom: 8px; }
+.timeline-dot.done { border-width: 3px; }
+.timeline-label { text-align: center; }
+.timeline-title { font-size: .82rem; font-weight: 600; color: #0f172a; }
+.timeline-date { font-size: .72rem; color: #64748b; }
+
+/* ---- milestones ---- */
+.ms-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.ms-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid #eef2f7; border-radius: 10px; }
+.ms-check { margin: 0; }
+.ms-main { flex: 1; }
+.ms-title { font-weight: 600; color: #0f172a; }
+.ms-title.ms-done { text-decoration: line-through; color: #94a3b8; }
+.ms-detail { color: #64748b; font-size: .9rem; }
+.ms-due { color: #64748b; font-size: .82rem; }
+.ms-edit, .ms-add { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.ms-edit input, .ms-add input { border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 9px; font: inherit; font-size: .88rem; }
+.ms-add { margin-top: 6px; padding-top: 12px; border-top: 1px dashed #e2e8f0; }
+
+/* ---- decisions table ---- */
+.dec-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.dec-table th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; padding: 6px 8px; }
+.dec-table td { padding: 7px 8px; border-top: 1px solid #eef2f7; vertical-align: top; }
+.dec-table input, .dec-table select { width: 100%; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 7px; padding: 5px 7px; font: inherit; font-size: .85rem; }
+.dec-status { display: inline-block; padding: 2px 9px; border-radius: 999px; background: #f1f5f9; font-size: .78rem; font-weight: 600; color: #475569; }
+.dec-add { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; padding-top: 12px; border-top: 1px dashed #e2e8f0; }
+.dec-add input, .dec-add select { border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 9px; font: inherit; font-size: .88rem; }
+
+/* ---- project report ---- */
+.report-wrap { max-width: none; width: 100%; }
+.report-toolbar { display: flex; align-items: center; gap: 14px; margin: 16px 0; flex-wrap: wrap; }
+.report { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 32px 36px; color: #0f172a; }
+.report-title { font-size: 1.7rem; margin: 0 0 18px; }
+.report-h2 { font-size: 1.05rem; margin: 24px 0 8px; border-bottom: 2px solid #0f172a; padding-bottom: 4px; }
+.report-meta { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+.report-meta th, .report-meta td { border: 1px solid #e2e8f0; padding: 8px 12px; text-align: left; font-size: .9rem; }
+.report-meta th { background: #f8fafc; width: 16%; color: #475569; }
+.report-status-row { margin: 8px 0; }
+.report-badge { display: inline-block; padding: 6px 16px; border-radius: 8px; color: #fff; font-weight: 700; font-size: .9rem; }
+.report-summary { display: flex; gap: 16px; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; margin-top: 10px; background: #f8fafc; }
+.report-summary-label { font-weight: 700; min-width: 80px; color: #475569; }
+.report-summary p { margin: 0 0 8px; }
+.report-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.report-table th, .report-table td { border: 1px solid #e2e8f0; padding: 7px 10px; text-align: left; }
+.report-table th { background: #f8fafc; color: #475569; font-size: .76rem; text-transform: uppercase; letter-spacing: .03em; }
+.report-empty { color: #94a3b8; text-align: center; }
+.report-note { font-size: .9rem; color: #334155; margin: 0 0 8px; }
+
+@media print {
+  body * { visibility: hidden; }
+  .report, .report * { visibility: visible; }
+  .report { position: absolute; left: 0; top: 0; width: 100%; border: none; border-radius: 0; padding: 0; }
+}
+
+/* ---- note feeds (chat-style Updates & Roadblocks) + clearer buttons (Batch 5) ---- */
+.note-link {
+  background: none; border: none; cursor: pointer; padding: 2px 6px;
+  font: inherit; font-size: .82rem; font-weight: 600; color: #2563eb; border-radius: 6px;
+}
+.note-link:hover { background: #eff6ff; }
+.note-link-danger { color: #dc2626; }
+.note-link-danger:hover { background: #fef2f2; }
+.timeline-actions { display: flex; gap: 2px; justify-content: center; margin-top: 4px; }
+.ms-actions { display: flex; gap: 4px; }
+
+.note-feed { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; max-height: 360px; overflow-y: auto; }
+.note-msg { display: flex; gap: 10px; }
+.note-avatar { flex-shrink: 0; width: 30px; height: 30px; font-size: .72rem; }
+.note-body { flex: 1; }
+.note-head { display: flex; align-items: baseline; gap: 8px; }
+.note-author { font-weight: 700; color: #0f172a; font-size: .9rem; }
+.note-time { font-size: .72rem; color: #94a3b8; }
+.note-text { color: #334155; font-size: .92rem; white-space: pre-wrap; margin-top: 2px; }
+.note-actions { display: flex; gap: 4px; margin-top: 2px; }
+.note-edit textarea, .note-compose textarea {
+  width: 100%; box-sizing: border-box; resize: vertical; border: 1px solid #cbd5e1;
+  border-radius: 10px; padding: 8px 11px; font: inherit; font-size: .9rem; background: #f8fafc;
+}
+.note-edit textarea:focus, .note-compose textarea:focus { outline: none; border-color: #2563eb; background: #fff; }
+.note-edit-actions { display: flex; gap: 6px; margin-top: 6px; }
+.note-compose { display: flex; gap: 8px; align-items: flex-end; border-top: 1px dashed #e2e8f0; padding-top: 12px; }
+.note-compose textarea { flex: 1; }
+
+/* ---- project task board: all discipline columns side by side (Batch 6) ---- */
+.board-disc { display: flex; gap: 14px; align-items: flex-start; overflow-x: auto; padding-bottom: 10px; }
+.board-disc > .col { flex: 1 0 200px; min-width: 200px; }
+
+/* ---- New Task draft hint (Batch: save half-typed task) ---- */
+.draft-hint { font-size: .78rem; color: #94a3b8; margin-right: auto; align-self: center; }
