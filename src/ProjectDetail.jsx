@@ -24,7 +24,7 @@ export default function ProjectDetail({
   onAddMilestone, onUpdateMilestone, onDeleteMilestone,
   onAddDecision, onUpdateDecision, onDeleteDecision,
   onAddNote, onEditNote, onDeleteNote,
-  onOpenTask, onAddTask, onBack, onUpdateProject, onToggleStar, onArchive, onTrashTask,
+  onOpenTask, onAddTask, onBack, onUpdateProject, onToggleStar, onArchive,
 }) {
   const [view, setView] = useState("overview");
 
@@ -401,7 +401,7 @@ export default function ProjectDetail({
                   {colTasks.map(t => (
                     <TaskCard key={t.id} task={t} people={people} projects={projects}
                       onOpen={() => onOpenTask(t.id)} onDragStart={() => {}} onDragEnd={() => {}}
-                      onStar={() => onToggleStar(t.id)} onArchive={() => onArchive(t.id)} onTrash={() => onTrashTask(t.id)} />
+                      onStar={() => onToggleStar(t.id)} onArchive={() => onArchive(t.id)} />
                   ))}
                 </section>
               );

@@ -4,7 +4,9 @@ import { fmtDate, effectiveProgress } from "./data.js";
 
 // ---------------------------------------------------------------------------
 // Project Dashboard. Filter by client AND by Done / Not done.
-// Select mode: pick several projects, then mark them Done or Trash them.
+// Select mode: pick several projects, then mark them Done or Archive them.
+// Projects use one set-aside flag (trashed in the DB), shown here as "Archive":
+// archived projects can be unarchived or deleted permanently.
 // ---------------------------------------------------------------------------
 
 export default function ProjectsPage({ projects, tasks, trash, people = [], onOpen, onAdd, onUpdate, onStar, onTrash, onRecover, onPurge, onBulk, isAdmin = false, budgets = [] }) {
@@ -160,7 +162,7 @@ export default function ProjectsPage({ projects, tasks, trash, people = [], onOp
           <button className="btn" onClick={() => setSelected(visible.map(p => p.id))}>Select all</button>
           <button className="btn" disabled={!selected.length} onClick={() => setSelected([])}>Clear</button>
           <button className="btn" disabled={!selected.length} onClick={() => runBulk("done")}>✓ Mark done</button>
-          <button className="btn btn-danger" disabled={!selected.length} onClick={() => runBulk("trash")}>🗑 Trash</button>
+          <button className="btn" disabled={!selected.length} onClick={() => runBulk("trash")}>📦 Archive</button>
           <button className="btn" onClick={exitSelect}>Cancel</button>
         </div>
       )}
@@ -211,9 +213,9 @@ export default function ProjectsPage({ projects, tasks, trash, people = [], onOp
                   >✎</button>
                   <button
                     className="proj-iconbtn"
-                    title="Move to trash"
+                    title="Archive"
                     onClick={e => { e.stopPropagation(); onTrash(p.id); }}
-                  >🗑</button>
+                  >📦</button>
                 </div>
               )}
             </article>
@@ -221,14 +223,14 @@ export default function ProjectsPage({ projects, tasks, trash, people = [], onOp
         })}
       </div>
 
-      {/* ---- trash ---- */}
+      {/* ---- archive ---- */}
       <section className="trash">
         <button className="trash-toggle" onClick={() => setTrashOpen(o => !o)}>
-          🗑 Trash ({trash.length}) {trashOpen ? "▾" : "▸"}
+          📦 Archive ({trash.length}) {trashOpen ? "▾" : "▸"}
         </button>
         {trashOpen && (
           <div className="trash-list">
-            {trash.length === 0 && <div className="col-empty">Trash is empty.</div>}
+            {trash.length === 0 && <div className="col-empty">Nothing archived yet.</div>}
             {trash.length > 0 && (
               <div className="bulk-bar">
                 <button className={trashMode ? "btn btn-primary" : "btn"}
@@ -238,9 +240,9 @@ export default function ProjectsPage({ projects, tasks, trash, people = [], onOp
                   <button className="btn" onClick={() => setTrashSel(trash.map(p => p.id))}>Select all</button>
                   <button className="btn" disabled={!trashSel.length} onClick={() => setTrashSel([])}>Clear</button>
                   <button className="btn" disabled={!trashSel.length}
-                    onClick={() => { onBulk(trashSel, "recover"); setTrashSel([]); }}>Recover</button>
+                    onClick={() => { onBulk(trashSel, "recover"); setTrashSel([]); }}>Unarchive</button>
                   <button className="btn btn-danger" disabled={!trashSel.length}
-                    onClick={() => { onBulk(trashSel, "purge"); setTrashSel([]); }}>Delete forever</button>
+                    onClick={() => { if (window.confirm(`Delete ${trashSel.length} project(s) permanently? This cannot be undone.`)) { onBulk(trashSel, "purge"); setTrashSel([]); } }}>Delete permanently</button>
                 </>}
               </div>
             )}
@@ -255,8 +257,8 @@ export default function ProjectsPage({ projects, tasks, trash, people = [], onOp
                 </div>
                 {!trashMode && (
                   <div className="trash-actions">
-                    <button className="btn" onClick={() => onRecover(p.id)}>Recover</button>
-                    <button className="btn btn-danger" onClick={() => onPurge(p.id)}>Delete forever</button>
+                    <button className="btn" onClick={() => onRecover(p.id)}>Unarchive</button>
+                    <button className="btn btn-danger" onClick={() => { if (window.confirm("Delete this project permanently? This cannot be undone.")) onPurge(p.id); }}>Delete permanently</button>
                   </div>
                 )}
               </div>

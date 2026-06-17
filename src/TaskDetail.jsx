@@ -11,16 +11,16 @@ import {
 // EDIT mode: the full form.
 // ---------------------------------------------------------------------------
 
-export default function TaskDetail({ task, people, projects, user, mode, onEdit, onCancel, onSave, onBack, onTrash, onAddComment, onEditComment, onDeleteComment }) {
+export default function TaskDetail({ task, people, projects, user, mode, onEdit, onCancel, onSave, onBack, onArchive, onAddComment, onEditComment, onDeleteComment }) {
   return mode === "edit"
     ? <EditMode task={task} people={people} projects={projects} onSave={onSave} onCancel={onCancel} />
     : <ViewMode task={task} people={people} projects={projects} user={user}
-        onEdit={onEdit} onBack={onBack} onTrash={onTrash}
+        onEdit={onEdit} onBack={onBack} onArchive={onArchive}
         onAddComment={onAddComment} onEditComment={onEditComment} onDeleteComment={onDeleteComment} />;
 }
 
 // ---------------------------------------------------------------------------
-function ViewMode({ task, people, projects, user, onEdit, onBack, onTrash, onAddComment, onEditComment, onDeleteComment }) {
+function ViewMode({ task, people, projects, user, onEdit, onBack, onArchive, onAddComment, onEditComment, onDeleteComment }) {
   const accent = projectColor(projects, task.project);
   const track = trackStatus(task);
   const barColor = track ? track.color : accent;
@@ -73,7 +73,7 @@ function ViewMode({ task, people, projects, user, onEdit, onBack, onTrash, onAdd
 
           <div className="detail-actions">
             <button className="btn btn-primary" onClick={onEdit}>✎ Edit</button>
-            <button className="btn btn-danger" onClick={onTrash}>🗑 Move to trash</button>
+            <button className="btn" onClick={onArchive}>📦 Archive</button>
           </div>
         </div>
 

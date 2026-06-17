@@ -3,11 +3,11 @@ import { PRIORITY_COLOR, colorOf, projectColor, trackStatus } from "./data.js";
 
 // ---------------------------------------------------------------------------
 // One task card. Click to open (or to select, in Select mode), drag to move,
-// ☆ to star, 📦 to archive (completed tasks only), 🗑 to trash.
+// ☆ to star, 📦 to archive (file it away; delete permanently from the Archive).
 // Its color comes from its PROJECT.
 // ---------------------------------------------------------------------------
 
-export default function TaskCard({ task, people, projects, selectMode, selected, onOpen, onDragStart, onDragEnd, onStar, onArchive, onTrash }) {
+export default function TaskCard({ task, people, projects, selectMode, selected, onOpen, onDragStart, onDragEnd, onStar, onArchive }) {
   const didDrag = useRef(false);
   const accent = projectColor(projects, task.project);
   const track = trackStatus(task);
@@ -67,18 +67,13 @@ export default function TaskCard({ task, people, projects, selectMode, selected,
             title={task.starred ? "Unstar task" : "Star task"}
             onClick={e => { e.stopPropagation(); onStar(); }}
           >{task.starred ? "★" : "☆"}</button>
-          {isCompleted && onArchive && (
+          {onArchive && (
             <button
               className="card-iconbtn"
-              title="Archive (file it away, keep the record)"
+              title="Archive (file it away; delete permanently from the Archive)"
               onClick={e => { e.stopPropagation(); onArchive(); }}
             >📦</button>
           )}
-          <button
-            className="card-iconbtn"
-            title="Move to trash"
-            onClick={e => { e.stopPropagation(); onTrash(); }}
-          >🗑</button>
         </div>
       )}
     </article>

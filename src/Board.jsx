@@ -8,13 +8,13 @@ import {
 // ---------------------------------------------------------------------------
 // Screen 2 — the board.
 // - New tasks must use an ESTABLISHED project + client (dropdowns; no typos).
-// - Select mode: pick several tasks, then Complete / Block / Archive / Trash
-//   them all at once.
-// - Completed tasks can be archived (📦): hidden from the board, kept in the
-//   Archive section below, still counted in project progress.
+// - Select mode: pick several tasks, then Complete / Block / Archive them.
+// - Archive (📦) files a task away: hidden from the board, kept in the Archive
+//   section below, still counted in project progress. From the Archive you can
+//   unarchive it or delete it permanently.
 // ---------------------------------------------------------------------------
 
-export default function Board({ tasks, trash, people, projects, onOpen, onDrop, onAdd, onStar, onTrash, onRecover, onPurge, onBulk, onUnarchive }) {
+export default function Board({ tasks, people, projects, onOpen, onDrop, onAdd, onStar, onPurge, onBulk, onUnarchive }) {
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState("Priority");
   const [sortDir, setSortDir] = useState("High to Low");
@@ -22,7 +22,6 @@ export default function Board({ tasks, trash, people, projects, onOpen, onDrop, 
   const [excluded, setExcluded] = useState({ projects: [], stages: [], assignees: [] });
   const [starredOnly, setStarredOnly] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
-  const [trashOpen, setTrashOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [dragOverCol, setDragOverCol] = useState(null);
   const draggedId = useRef(null);
@@ -39,13 +38,10 @@ export default function Board({ tasks, trash, people, projects, onOpen, onDrop, 
     exitSelect();
   }
 
-  // ---- select mode (archive + trash sections) ----
+  // ---- select mode (archive section) ----
   const [archMode, setArchMode] = useState(false);
   const [archSel, setArchSel] = useState([]);
-  const [trashMode, setTrashMode] = useState(false);
-  const [trashSel, setTrashSel] = useState([]);
   const toggleArch = (id) => setArchSel(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
-  const toggleTrash = (id) => setTrashSel(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
 
   const active = tasks.filter(t => !t.archived);
   const archived = tasks.filter(t => t.archived);
@@ -181,7 +177,6 @@ export default function Board({ tasks, trash, people, projects, onOpen, onDrop, 
           <button className="btn" disabled={!selected.length} onClick={() => runBulk("block")}>⛔ Block</button>
           <button className="btn" disabled={!selected.length} onClick={() => runBulk("unblock")}>Unblock</button>
           <button className="btn" disabled={!selected.length} onClick={() => runBulk("archive")}>📦 Archive</button>
-          <button className="btn btn-danger" disabled={!selected.length} onClick={() => runBulk("trash")}>🗑 Trash</button>
           <button className="btn" onClick={exitSelect}>Cancel</button>
         </div>
       )}
@@ -230,7 +225,6 @@ export default function Board({ tasks, trash, people, projects, onOpen, onDrop, 
                   onDragEnd={() => { draggedId.current = null; setDragOverCol(null); }}
                   onStar={() => onStar(t.id)}
                   onArchive={() => onBulk([t.id], "archive")}
-                  onTrash={() => onTrash(t.id)}
                 />
               ))}
             </section>
@@ -259,7 +253,7 @@ export default function Board({ tasks, trash, people, projects, onOpen, onDrop, 
                   <button className="btn" disabled={!archSel.length}
                     onClick={() => { onBulk(archSel, "unarchive"); setArchSel([]); }}>Unarchive</button>
                   <button className="btn btn-danger" disabled={!archSel.length}
-                    onClick={() => { onBulk(archSel, "trash"); setArchSel([]); }}>🗑 Trash</button>
+                    onClick={() => { if (window.confirm(`Delete ${archSel.length} task(s) permanently? This cannot be undone.`)) { onBulk(archSel, "purge"); setArchSel([]); } }}>Delete permanently</button>
                 </>}
               </div>
             )}
@@ -275,51 +269,7 @@ export default function Board({ tasks, trash, people, projects, onOpen, onDrop, 
                 {!archMode && (
                   <div className="trash-actions">
                     <button className="btn" onClick={() => onUnarchive(t.id)}>Unarchive</button>
-                    <button className="btn btn-danger" onClick={() => onTrash(t.id)}>🗑 Trash</button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* ---- trash ---- */}
-      <section className="trash">
-        <button className="trash-toggle" onClick={() => setTrashOpen(o => !o)}>
-          🗑 Trash ({trash.length}) {trashOpen ? "▾" : "▸"}
-        </button>
-        {trashOpen && (
-          <div className="trash-list">
-            {trash.length === 0 && <div className="col-empty">Trash is empty.</div>}
-            {trash.length > 0 && (
-              <div className="bulk-bar">
-                <button className={trashMode ? "btn btn-primary" : "btn"}
-                  onClick={() => { setTrashMode(m => !m); setTrashSel([]); }}>☑ Select</button>
-                {trashMode && <>
-                  <span className="bulk-count mono">{trashSel.length} selected</span>
-                  <button className="btn" onClick={() => setTrashSel(trash.map(t => t.id))}>Select all</button>
-                  <button className="btn" disabled={!trashSel.length} onClick={() => setTrashSel([])}>Clear</button>
-                  <button className="btn" disabled={!trashSel.length}
-                    onClick={() => { onBulk(trashSel, "recover"); setTrashSel([]); }}>Recover</button>
-                  <button className="btn btn-danger" disabled={!trashSel.length}
-                    onClick={() => { onBulk(trashSel, "purge"); setTrashSel([]); }}>Delete forever</button>
-                </>}
-              </div>
-            )}
-            {trash.map(t => (
-              <div key={t.id}
-                className={"trash-row" + (trashMode ? " trash-row-selectable" : "") + (trashSel.includes(t.id) ? " trash-row-selected" : "")}
-                onClick={trashMode ? () => toggleTrash(t.id) : undefined}>
-                <div>
-                  {trashMode && <span className={"card-checkbox" + (trashSel.includes(t.id) ? " on" : "")}>{trashSel.includes(t.id) ? "✓" : ""}</span>}
-                  <span className="mono trash-id">TK:{t.id}</span> {t.title}
-                  <span className="trash-proj"> — {t.project}</span>
-                </div>
-                {!trashMode && (
-                  <div className="trash-actions">
-                    <button className="btn" onClick={() => onRecover(t.id)}>Recover</button>
-                    <button className="btn btn-danger" onClick={() => onPurge(t.id)}>Delete forever</button>
+                    <button className="btn btn-danger" onClick={() => { if (window.confirm("Delete this task permanently? This cannot be undone.")) onPurge(t.id); }}>Delete permanently</button>
                   </div>
                 )}
               </div>

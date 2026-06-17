@@ -680,7 +680,7 @@ export default function App() {
       onCancel={() => setTaskView({ ...taskView, mode: "view" })}
       onSave={(t) => { updateTask(t); setTaskView({ name: "board" }); }}
       onBack={() => setTaskView({ name: "board" })}
-      onTrash={() => trashTask(currentTask.id)}
+      onArchive={() => { bulkTasks([currentTask.id], "archive"); setTaskView({ name: "board" }); }}
     />
   );
 
@@ -730,15 +730,12 @@ export default function App() {
         taskView.name === "task" && currentTask ? taskDetail : (
           <Board
             tasks={tasks}
-            trash={trash}
             people={people}
             projects={projects}
             onOpen={(id) => setTaskView({ name: "task", id, mode: "view" })}
             onDrop={dropTask}
             onAdd={addTask}
             onStar={toggleTaskStar}
-            onTrash={trashTask}
-            onRecover={recoverTask}
             onPurge={purgeTask}
             onBulk={bulkTasks}
             onUnarchive={unarchiveTask}
@@ -775,7 +772,6 @@ export default function App() {
               budgetStatus={user.is_admin ? budgetStatus(currentProject.id) : null}
               onToggleStar={toggleTaskStar}
               onArchive={(id) => bulkTasks([id], "archive")}
-              onTrashTask={trashTask}
             />
           ) : (
             <ProjectsPage
