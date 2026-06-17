@@ -55,12 +55,7 @@ export const AVATAR_COLORS = [
 
 // The starting team. New signups get added to this list automatically.
 // (Update initials/names here when you have the real ones.)
-export const DEFAULT_PEOPLE = [
-  { initials: "TM", name: "Tohith", color: "#10b981" },
-  { initials: "VC", name: "Vanessa", color: "#0ea5e9" },
-  { initials: "RA", name: "Rafeeq", color: "#f97316" },
-  { initials: "MT", name: "Madhavi", color: "#8b5cf6" },
-];
+export const DEFAULT_PEOPLE = [];
 
 export function colorOf(people, initials) {
   return people.find(p => p.initials === initials)?.color || "#94a3b8";
