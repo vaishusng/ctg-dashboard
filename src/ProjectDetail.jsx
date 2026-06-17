@@ -2,7 +2,6 @@ import { useState } from "react";
 import TaskCard from "./TaskCard.jsx";
 import ProjectModal from "./ProjectModal.jsx";
 import TaskModal from "./TaskModal.jsx";
-import ProjectReport from "./ProjectReport.jsx";
 import NoteFeed from "./NoteFeed.jsx";
 import {
   STAGES, PRIORITY_RANK, TASK_TYPES, TASK_TYPE_COLOR,
@@ -21,7 +20,7 @@ const DECISION_STATUSES = ["Pending", "In Review", "Approved"];
 
 export default function ProjectDetail({
   project, tasks, people, projects,
-  milestones = [], decisions = [], projectNotes = [], user,
+  milestones = [], decisions = [], projectNotes = [], user, budget = 0, budgetStatus = null,
   onAddMilestone, onUpdateMilestone, onDeleteMilestone,
   onAddDecision, onUpdateDecision, onDeleteDecision,
   onAddNote, onEditNote, onDeleteNote,
@@ -168,6 +167,28 @@ export default function ProjectDetail({
               </div>
             </div>
           </div>
+          {user?.is_admin && (
+            <div className="pd-hcell">
+              <h3 className="pd-hcell-title">Budget</h3>
+              <div className="pd-budget mono" style={{ fontSize: 22, fontWeight: 700 }}>
+                {Number(budget).toLocaleString(undefined, { style: "currency", currency: "USD" })}
+              </div>
+              {budgetStatus && (
+                <div style={{ marginTop: 8 }}>
+                  <span className="mono" style={{
+                    display: "inline-block", padding: "2px 10px", borderRadius: 999,
+                    background: budgetStatus.color, color: "#fff", fontSize: 12, fontWeight: 700,
+                  }}>{budgetStatus.label}</span>
+                  {budgetStatus.variance !== null && (
+                    <div className="pd-label" style={{ marginTop: 4 }}>
+                      {budgetStatus.variance >= 0 ? "Remaining " : "Over by "}
+                      {Math.abs(budgetStatus.variance).toLocaleString(undefined, { style: "currency", currency: "USD" })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -175,7 +196,6 @@ export default function ProjectDetail({
       <div className="pd-tabs">
         <button className={view === "overview" ? "tab tab-active" : "tab"} onClick={() => setView("overview")}>Overview</button>
         <button className={view === "tasks" ? "tab tab-active" : "tab"} onClick={() => setView("tasks")}>Tasks ({projTasks.length})</button>
-        <button className={view === "report" ? "tab tab-active" : "tab"} onClick={() => setView("report")}>📄 Report</button>
       </div>
 
       {/* ================= OVERVIEW ================= */}
@@ -390,16 +410,11 @@ export default function ProjectDetail({
         </>
       )}
 
-      {/* ================= REPORT ================= */}
-      {view === "report" && (
-        <ProjectReport project={project} tasks={projTasks} people={people} milestones={sortedMs} decisions={decisions} projectNotes={projectNotes} eff={eff} />
-      )}
-
       {addOpen && (
         <TaskModal people={people} projects={projects} lockedProject={project.name} onAdd={onAddTask} onClose={() => setAddOpen(false)} />
       )}
       {editOpen && (
-        <ProjectModal initial={project} people={people} autoValue={effectiveProgress({ ...project, auto: true }, tasks)} onClose={() => setEditOpen(false)} onSave={onUpdateProject} />
+        <ProjectModal initial={project} people={people} autoValue={effectiveProgress({ ...project, auto: true }, tasks)} isAdmin={!!user?.is_admin} initialBudget={budget} onClose={() => setEditOpen(false)} onSave={onUpdateProject} />
       )}
     </main>
   );

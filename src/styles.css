@@ -964,3 +964,91 @@ body {
 
 /* ---- New Task draft hint (Batch: save half-typed task) ---- */
 .draft-hint { font-size: .78rem; color: #94a3b8; margin-right: auto; align-self: center; }
+
+/* ============ My Hours + Wages (pay pages) ============ */
+.pay-intro {
+  color: var(--ink-soft); font-size: 14px; line-height: 1.5;
+  max-width: 640px; margin: 0 0 20px;
+}
+.pay-form {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px;
+  padding: 16px 18px; background: var(--card);
+  border: 1px solid var(--line); border-radius: 14px; margin-bottom: 16px;
+}
+.pay-form .field-note { flex: 1; min-width: 180px; }
+.pay-error { color: var(--red); font-size: 13px; margin: 0 0 14px; }
+.pay-sectionhead {
+  display: flex; justify-content: space-between; align-items: baseline; margin: 22px 0 10px;
+}
+.pay-sectionhead h2 { font-size: 18px; font-weight: 700; margin: 0; color: var(--ink); }
+.pay-total { color: var(--ink-faint); font-weight: 600; font-size: 14px; }
+.pay-list { display: flex; flex-direction: column; gap: 8px; max-width: 760px; }
+.pay-row {
+  display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+  flex-wrap: wrap; row-gap: 8px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  transition: box-shadow .15s ease;
+}
+.pay-row:hover { box-shadow: 0 4px 14px rgba(15,23,42,.08); }
+.pay-name { flex: 1; font-weight: 600; color: var(--ink); }
+.pay-date { width: 104px; color: var(--ink-faint); font-size: 13px; font-variant-numeric: tabular-nums; }
+.pay-project { flex: 1; font-weight: 600; color: var(--ink); }
+.pay-hours { width: 72px; text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+.pay-note { flex: 1.4; color: var(--ink-soft); font-size: 14px; }
+.pay-unit { color: var(--ink-faint); font-weight: 600; }
+.pay-rate-input { width: 92px; text-align: right; }
+.pay-row input, .pay-row select {
+  border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 9px; font: inherit; font-size: 14px;
+}
+.pay-row input:focus, .pay-row select:focus { outline: none; border-color: var(--orange); }
+.pay-feedback { width: 64px; font-size: 12px; font-weight: 700; }
+.pay-feedback.ok { color: #16a34a; }
+.pay-feedback.bad { color: var(--red); width: auto; }
+.pay-actions { display: flex; gap: 6px; }
+.pay-empty { color: #94a3b8; font-size: 14px; }
+
+/* ============ OfficeTimer-style report parameters ============ */
+.report-params {
+  border: 1px solid var(--line); border-radius: 12px; background: var(--card);
+  margin-bottom: 18px; overflow: hidden; max-width: 880px;
+}
+.report-params-head {
+  background: var(--teal); color: #fff; font-weight: 700; padding: 8px 14px; font-size: 14px;
+}
+.report-params-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.rp-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.rp-label { font-weight: 600; color: var(--ink-faint); font-size: 13px; min-width: 84px; }
+.rp-emps { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.report-params-body input[type="date"] {
+  border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 9px; font: inherit; font-size: 14px;
+}
+.report-params-body input[type="date"]:focus { outline: none; border-color: var(--orange); }
+.report-params-body > .btn { align-self: flex-start; }
+
+/* ============ Multi-select dropdown ============ */
+.ms { position: relative; display: inline-block; min-width: 190px; }
+.ms-button {
+  width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  border: 1px solid #cbd5e1; border-radius: 8px; padding: 7px 10px; background: #fff;
+  font: inherit; font-size: 14px; cursor: pointer; color: var(--ink);
+}
+.ms-button:hover { border-color: #94a3b8; }
+.ms-caret { color: var(--ink-faint); font-size: 12px; }
+.ms-menu {
+  position: absolute; z-index: 30; top: calc(100% + 4px); left: 0;
+  min-width: 230px; max-height: 270px; overflow-y: auto; background: #fff;
+  border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(15,23,42,.15); padding: 6px;
+}
+.ms-actions { display: flex; gap: 6px; padding: 4px 6px 8px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.ms-actions button {
+  flex: 1; font-size: 12px; padding: 4px 8px; border: 1px solid var(--line);
+  border-radius: 6px; background: var(--paper); cursor: pointer; color: var(--ink-soft);
+}
+.ms-actions button:hover { background: #e2e8f0; }
+.ms-opt { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; font-size: 14px; cursor: pointer; }
+.ms-opt:hover { background: var(--paper); }
+.ms-empty { padding: 8px; color: var(--ink-faint); font-size: 13px; }
+
+.pay-tasktag { color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.pay-row select:disabled { background: #f1f5f9; color: #94a3b8; }

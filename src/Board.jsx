@@ -20,6 +20,7 @@ export default function Board({ tasks, trash, people, projects, onOpen, onDrop, 
   const [sortDir, setSortDir] = useState("High to Low");
   const [filterOpen, setFilterOpen] = useState(false);
   const [excluded, setExcluded] = useState({ projects: [], stages: [], assignees: [] });
+  const [starredOnly, setStarredOnly] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -62,12 +63,13 @@ export default function Board({ tasks, trash, people, projects, onOpen, onDrop, 
   }
 
   const activeFilters =
-    excluded.projects.length + excluded.stages.length + excluded.assignees.length;
+    excluded.projects.length + excluded.stages.length + excluded.assignees.length + (starredOnly ? 1 : 0);
 
   function passes(t) {
     if (excluded.projects.includes(t.project)) return false;
     if (excluded.stages.includes(t.stage)) return false;
     if (t.assignees.length && t.assignees.every(a => excluded.assignees.includes(a))) return false;
+    if (starredOnly && !t.starred) return false;
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   }
@@ -127,6 +129,13 @@ export default function Board({ tasks, trash, people, projects, onOpen, onDrop, 
                       onChange={() => toggleExcluded("assignees", p.initials)} /> {p.initials} — {p.name}
                   </label>
                 ))}
+              </div>
+              <div className="filter-group">
+                <div className="filter-title">Starred</div>
+                <label className="check">
+                  <input type="checkbox" checked={starredOnly}
+                    onChange={() => setStarredOnly(v => !v)} /> Starred only
+                </label>
               </div>
             </div>
           )}

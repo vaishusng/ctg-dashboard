@@ -7,13 +7,15 @@ import { fmtDate, effectiveProgress } from "./data.js";
 // Select mode: pick several projects, then mark them Done or Trash them.
 // ---------------------------------------------------------------------------
 
-export default function ProjectsPage({ projects, tasks, trash, people = [], onOpen, onAdd, onUpdate, onStar, onTrash, onRecover, onPurge, onBulk }) {
+export default function ProjectsPage({ projects, tasks, trash, people = [], onOpen, onAdd, onUpdate, onStar, onTrash, onRecover, onPurge, onBulk, isAdmin = false, budgets = [] }) {
+  const budgetOf = (id) => { const b = budgets.find(x => x.project_id === id); return b ? Number(b.amount) : 0; };
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState("Delivery date");
   const [sortDir, setSortDir] = useState("High to Low");
   const [filterOpen, setFilterOpen] = useState(false);
   const [excludedClients, setExcludedClients] = useState([]);
   const [excludedStatus, setExcludedStatus] = useState([]); // "Done" | "Not done"
+  const [starredOnly, setStarredOnly] = useState(false);
   const [modal, setModal] = useState(null);
   const [trashOpen, setTrashOpen] = useState(false);
 
@@ -49,12 +51,13 @@ export default function ProjectsPage({ projects, tasks, trash, people = [], onOp
       prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]
     );
   }
-  const activeFilters = excludedClients.length + excludedStatus.length;
+  const activeFilters = excludedClients.length + excludedStatus.length + (starredOnly ? 1 : 0);
 
   function passes(p) {
     const status = effectiveProgress(p, tasks) >= 100 ? "Done" : "Not done";
     if (excludedStatus.includes(status)) return false;
     if (excludedClients.includes(p.client)) return false;
+    if (starredOnly && !p.starred) return false;
     if (search) {
       const q = search.toLowerCase();
       if (!p.name.toLowerCase().includes(q) && !p.client.toLowerCase().includes(q)) return false;
@@ -99,6 +102,13 @@ export default function ProjectsPage({ projects, tasks, trash, people = [], onOp
                       onChange={() => toggleStatus(s)} /> {s}
                   </label>
                 ))}
+              </div>
+              <div className="filter-group">
+                <div className="filter-title">Starred</div>
+                <label className="check">
+                  <input type="checkbox" checked={starredOnly}
+                    onChange={() => setStarredOnly(v => !v)} /> Starred only
+                </label>
               </div>
               <div className="filter-group">
                 <div className="filter-title">Clients</div>
@@ -260,6 +270,8 @@ export default function ProjectsPage({ projects, tasks, trash, people = [], onOp
           initial={modal === "new" ? null : modal}
           people={people}
           autoValue={modal === "new" ? null : effectiveProgress({ ...modal, auto: true }, tasks)}
+          isAdmin={isAdmin}
+          initialBudget={modal === "new" ? 0 : budgetOf(modal.id)}
           onClose={() => setModal(null)}
           onSave={(clean) => (modal === "new" ? onAdd(clean) : onUpdate(clean))}
         />

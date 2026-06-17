@@ -15,8 +15,10 @@ const emptyDraft = {
   assignees: [],
 };
 
-export default function ProjectModal({ initial, people = [], autoValue = null, onClose, onSave }) {
-  const [draft, setDraft] = useState(initial ? { ...emptyDraft, ...initial } : emptyDraft);
+export default function ProjectModal({ initial, people = [], autoValue = null, isAdmin = false, initialBudget = 0, onClose, onSave }) {
+  const [draft, setDraft] = useState(
+    initial ? { ...emptyDraft, ...initial, budget: initialBudget } : { ...emptyDraft, budget: initialBudget }
+  );
 
   function toggleAssignee(i) {
     setDraft(d => ({
@@ -36,6 +38,7 @@ export default function ProjectModal({ initial, people = [], autoValue = null, o
       client: draft.client.trim() || "—",
       description: draft.description.trim(),
       progress: Number(draft.progress),
+      ...(isAdmin ? { budget: Number(draft.budget) || 0 } : {}),
     });
     onClose();
   }
@@ -57,6 +60,13 @@ export default function ProjectModal({ initial, people = [], autoValue = null, o
             <span>Delivery date</span>
             <input type="date" value={draft.due || ""} onChange={e => setDraft({ ...draft, due: e.target.value })} />
           </label>
+          {isAdmin && (
+            <label className="field">
+              <span>Budget (owners only)</span>
+              <input type="number" min="0" step="0.01" placeholder="0.00"
+                value={draft.budget ?? ""} onChange={e => setDraft({ ...draft, budget: e.target.value })} />
+            </label>
+          )}
           <label className="field">
             <span>Project manager</span>
             <select value={draft.manager || ""} onChange={e => setDraft({ ...draft, manager: e.target.value })}>

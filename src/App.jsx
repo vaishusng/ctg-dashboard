@@ -4,6 +4,9 @@ import HomePage from "./HomePage.jsx";
 import Board from "./Board.jsx";
 import ProjectsPage from "./ProjectsPage.jsx";
 import ProjectDetail from "./ProjectDetail.jsx";
+import ReportsPage from "./ReportsPage.jsx";
+import WagesPage from "./WagesPage.jsx";
+import MyHoursPage from "./MyHoursPage.jsx";
 import ChatPage from "./ChatPage.jsx";
 import TaskDetail from "./TaskDetail.jsx";
 import ProfilePage from "./ProfilePage.jsx";
@@ -51,7 +54,9 @@ function cleanProject(p) {
   return out;
 }
 
-const PAGES = ["Home", "Projects", "Tasks", "Team Chat"];
+const PAGES = ["Home", "Projects", "Tasks", "My Hours", "Wages", "Project Report", "Team Chat"];
+// Tabs only owners (admins) should see in the top nav.
+const ADMIN_ONLY_PAGES = ["Wages"];
 
 export default function App() {
   const [user, setUser] = useState(null);          // set by Supabase auth listener below
@@ -67,6 +72,14 @@ export default function App() {
   const [milestones, setMilestones] = useState([]);
   const [decisions, setDecisions] = useState([]);
   const [projectNotes, setProjectNotes] = useState([]);
+  const [staff, setStaff] = useState([]);   // full profiles (with ids), admin wage editing
+  const [wages, setWages] = useState([]);    // [{ user_id, hourly_rate }], admin-only
+  const [timeLogs, setTimeLogs] = useState([]); // the logged-in person's own hours
+  const [taskHours, setTaskHours] = useState({}); // { task_id: total logged hours }, team-wide
+  const [allHours, setAllHours] = useState([]); // team-wide hours, no money: [{ user_id, project_id, hours, date }]
+  const [budgets, setBudgets] = useState([]);   // [{ project_id, amount }], admin-only
+  const [costs, setCosts] = useState({});        // { project_id: totalLaborCost }, admin-only
+  const [laborLogs, setLaborLogs] = useState([]); // joined hours+rate rows, admin-only
   const [dataReady, setDataReady] = useState(false);
 
   // Remember which screen you were on across tab switches, new tabs, and
@@ -121,6 +134,10 @@ export default function App() {
     loadMilestones();
     loadDecisions();
     loadProjectNotes();
+    loadTimeLogs();
+    loadTaskHours();
+    loadAllHours();
+    if (user.is_admin) { loadWages(); loadBudgets(); loadCosts(); }
     setDataReady(true);
 
     // Realtime: when anyone changes these tables, re-load them here.
@@ -131,6 +148,10 @@ export default function App() {
       .on("postgres_changes", { event: "*", schema: "public", table: "milestones" }, loadMilestones)
       .on("postgres_changes", { event: "*", schema: "public", table: "decisions" }, loadDecisions)
       .on("postgres_changes", { event: "*", schema: "public", table: "project_notes" }, loadProjectNotes)
+      .on("postgres_changes", { event: "*", schema: "public", table: "wages" }, () => { if (user.is_admin) loadWages(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "time_logs" }, () => { loadTimeLogs(); loadTaskHours(); loadAllHours(); if (user.is_admin) loadCosts(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "time_log_rates" }, () => { if (user.is_admin) loadCosts(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "project_budgets" }, () => { if (user.is_admin) loadBudgets(); })
       .subscribe();
     return () => supabase.removeChannel(channel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -149,6 +170,7 @@ export default function App() {
         initials: profile.initials,
         color: profile.color,
         chat_cleared_at: profile.chat_cleared_at || "",
+        is_admin: !!profile.is_admin,
       });
       refreshPeople();
     }
@@ -158,7 +180,7 @@ export default function App() {
   // The people list = everyone with an account, plus the built-in starter
   // initials (TM/VC/RA/MT) so seed tasks keep their colors pre-signup.
   async function refreshPeople() {
-    const { data } = await supabase.from("profiles").select("initials,name,color");
+    const { data } = await supabase.from("profiles").select("id,initials,name,color");
     const merged = [...(data || [])];
     for (const p of DEFAULT_PEOPLE)
       if (!merged.some(m => m.initials === p.initials)) merged.push(p);
@@ -193,6 +215,160 @@ export default function App() {
   async function loadDecisions() {
     const { data } = await supabase.from("decisions").select("*").order("created_at");
     setDecisions(data || []);
+  }
+  // Admin-only: staff list (with ids) + their hourly rates.
+  async function loadWages() {
+    const { data: profs } = await supabase
+      .from("profiles").select("id,name,initials,color").order("name");
+    setStaff(profs || []);
+    const { data: w } = await supabase.from("wages").select("user_id,hourly_rate");
+    setWages(w || []);
+  }
+  // Admin-only: per-project budgets (kept off the world-readable projects table).
+  async function loadBudgets() {
+    const { data } = await supabase.from("project_budgets").select("project_id,amount");
+    setBudgets(data || []);
+  }
+  const budgetOf = (projectId) => {
+    const b = budgets.find(x => x.project_id === projectId);
+    return b ? Number(b.amount) : 0;
+  };
+  // Admin-only: total labor cost per project = sum of (hours * snapshotted rate)
+  // across every worker's entries. Hours and rates live in separate tables.
+  async function loadCosts() {
+    const { data: logs } = await supabase.from("time_logs").select("id,user_id,project_id,task_id,hours,work_date,note");
+    const { data: rates } = await supabase.from("time_log_rates").select("log_id,rate_applied");
+    const rateMap = {};
+    (rates || []).forEach(r => { rateMap[r.log_id] = Number(r.rate_applied) || 0; });
+    const joined = (logs || []).map(l => ({
+      user_id: l.user_id, project_id: l.project_id, task_id: l.task_id,
+      hours: Number(l.hours) || 0, rate: rateMap[l.id] || 0,
+      date: l.work_date, note: l.note || "",
+    }));
+    setLaborLogs(joined);
+    const acc = {};
+    joined.forEach(l => { acc[l.project_id] = (acc[l.project_id] || 0) + l.hours * l.rate; });
+    setCosts(acc);
+  }
+  // Per-worker hours and cost for one project, for the owners-only report table.
+  // Rate shown is the effective rate (cost / hours), so it reconciles even when
+  // a person's wage changed partway through.
+  function projectLabor(projectId) {
+    const byUser = {};
+    laborLogs.filter(l => l.project_id === projectId).forEach(l => {
+      if (!byUser[l.user_id]) byUser[l.user_id] = { user_id: l.user_id, hours: 0, cost: 0 };
+      byUser[l.user_id].hours += l.hours;
+      byUser[l.user_id].cost += l.hours * l.rate;
+    });
+    return Object.values(byUser).map(u => {
+      const p = staff.find(s => s.id === u.user_id);
+      return {
+        ...u,
+        name: p ? p.name : "(former member)",
+        initials: p ? p.initials : "??",
+        rate: u.hours > 0 ? u.cost / u.hours : 0,
+      };
+    }).sort((a, b) => b.cost - a.cost);
+  }
+  // Per-entry rows for the detailed report view (one row per logged entry).
+  function projectEntries(projectId) {
+    return laborLogs
+      .filter(l => l.project_id === projectId)
+      .map(l => {
+        const p = staff.find(s => s.id === l.user_id);
+        const t = tasks.find(x => x.id === l.task_id);
+        return {
+          user_id: l.user_id,
+          name: p ? p.name : "(former member)",
+          initials: p ? p.initials : "??",
+          task: t ? t.title : "",
+          taskEst: t ? (Number(t.hours) || 0) : null,
+          date: l.date,
+          note: l.note,
+          hours: l.hours,
+          rate: l.rate,
+          amount: l.hours * l.rate,
+        };
+      })
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+  }
+  // budget - cost. Negative = over (red). Within 5% of budget remaining = on
+  // (amber). More than 5% remaining = under (green). No budget set = neutral.
+  function budgetStatus(projectId) {
+    const budget = budgetOf(projectId);
+    const cost = costs[projectId] || 0;
+    if (!(budget > 0)) return { label: "No budget set", color: "#94a3b8", variance: null, cost };
+    const variance = budget - cost;
+    if (variance < 0) return { label: "Over budget", color: "#dc2626", variance, cost };
+    if (variance <= 0.05 * budget) return { label: "On budget", color: "#f59e0b", variance, cost };
+    return { label: "Under budget", color: "#16a34a", variance, cost };
+  }
+  // Admin-only: set or update one person's hourly rate.
+  async function saveWage(userId, rate) {
+    const value = Number(rate);
+    if (!Number.isFinite(value) || value < 0) return "Enter a rate of 0 or more.";
+    const { error } = await supabase.from("wages").upsert({
+      user_id: userId,
+      hourly_rate: value,
+      updated_at: new Date().toISOString(),
+      updated_by: user.id,
+    });
+    if (error) return "Couldn't save that rate; try again.";
+    loadWages();
+    return null;
+  }
+  // ---- time logs (everyone logs their OWN hours; rate is snapshotted by a db trigger) ----
+  async function loadTimeLogs() {
+    const { data } = await supabase
+      .from("time_logs").select("*")
+      .eq("user_id", user.id)
+      .order("work_date", { ascending: false });
+    setTimeLogs(data || []);
+  }
+  // Team-wide hours logged per task (no money), so the report's Tasks section
+  // can show real time spent to everyone.
+  async function loadTaskHours() {
+    const { data } = await supabase.from("time_logs").select("task_id,hours");
+    const acc = {};
+    (data || []).forEach(l => { if (l.task_id != null) acc[l.task_id] = (acc[l.task_id] || 0) + (Number(l.hours) || 0); });
+    setTaskHours(acc);
+  }
+  // Team-wide hours per project per person (no money), readable by everyone, so a
+  // non-admin can run the Consolidated project / employee / hours report.
+  async function loadAllHours() {
+    const { data } = await supabase.from("time_logs").select("user_id,project_id,hours,work_date");
+    setAllHours((data || []).map(l => ({
+      user_id: l.user_id, project_id: l.project_id,
+      hours: Number(l.hours) || 0, date: l.work_date,
+    })));
+  }
+  async function addTimeLog({ project_id, task_id, hours, work_date, note }) {
+    await supabase.from("time_logs").insert({
+      user_id: user.id,
+      project_id,
+      task_id: task_id || null,
+      hours: Number(hours) || 0,
+      work_date,
+      note: note || "",
+    });
+    loadTimeLogs();
+    loadTaskHours();
+    loadAllHours();
+    if (user.is_admin) loadCosts();
+  }
+  async function updateTimeLog(id, patch) {
+    await supabase.from("time_logs").update(patch).eq("id", id);
+    loadTimeLogs();
+    loadTaskHours();
+    loadAllHours();
+    if (user.is_admin) loadCosts();
+  }
+  async function deleteTimeLog(id) {
+    await supabase.from("time_logs").delete().eq("id", id);
+    loadTimeLogs();
+    loadTaskHours();
+    loadAllHours();
+    if (user.is_admin) loadCosts();
   }
 
   // ---- milestones ----
@@ -374,11 +550,25 @@ export default function App() {
 
   // ---- project operations ----
   async function addProject(data) {
-    await supabase.from("projects").insert(cleanProject(data));
+    const { data: row } = await supabase.from("projects").insert(cleanProject(data)).select("id").single();
+    if (user.is_admin && row && data.budget !== undefined) {
+      await supabase.from("project_budgets").upsert({
+        project_id: row.id, amount: Number(data.budget) || 0,
+        updated_at: new Date().toISOString(), updated_by: user.id,
+      });
+      loadBudgets();
+    }
     loadProjects();
   }
   async function updateProject(u) {
     await supabase.from("projects").update(cleanProject(u)).eq("id", u.id);
+    if (user.is_admin && u.budget !== undefined) {
+      await supabase.from("project_budgets").upsert({
+        project_id: u.id, amount: Number(u.budget) || 0,
+        updated_at: new Date().toISOString(), updated_by: user.id,
+      });
+      loadBudgets();
+    }
     loadProjects();
   }
   async function toggleProjectStar(id) {
@@ -499,7 +689,7 @@ export default function App() {
       <nav className="nav">
         <span className="nav-logo">C</span>
         <span className="nav-brand">CTG Workspace</span>
-        {PAGES.map(p => (
+        {PAGES.filter(p => !ADMIN_ONLY_PAGES.includes(p) || user.is_admin).map(p => (
           <button key={p} className={"nav-btn" + (page === p ? " nav-btn-active" : "")} onClick={() => go(p)}>
             {p}
           </button>
@@ -581,6 +771,8 @@ export default function App() {
               onAddTask={addTask}
               onBack={() => setProjView({ name: "grid" })}
               onUpdateProject={updateProject}
+              budget={budgetOf(currentProject.id)}
+              budgetStatus={user.is_admin ? budgetStatus(currentProject.id) : null}
               onToggleStar={toggleTaskStar}
               onArchive={(id) => bulkTasks([id], "archive")}
               onTrashTask={trashTask}
@@ -599,9 +791,44 @@ export default function App() {
               onRecover={recoverProject}
               onPurge={purgeProject}
               onBulk={bulkProjects}
+              isAdmin={user.is_admin}
+              budgets={budgets}
             />
           )
         )
+      )}
+
+      {page === "My Hours" && (
+        <MyHoursPage
+          projects={projects}
+          tasks={tasks}
+          logs={timeLogs}
+          onAdd={addTimeLog}
+          onUpdate={updateTimeLog}
+          onDelete={deleteTimeLog}
+        />
+      )}
+
+      {page === "Wages" && user.is_admin && (
+        <WagesPage staff={staff} wages={wages} onSave={saveWage} />
+      )}
+
+      {page === "Project Report" && (
+        <ReportsPage
+          projects={projects}
+          tasks={tasks}
+          people={people}
+          milestones={milestones}
+          decisions={decisions}
+          projectNotes={projectNotes}
+          taskHours={taskHours}
+          isAdmin={user.is_admin}
+          budgetOf={budgetOf}
+          budgetStatus={budgetStatus}
+          projectLabor={projectLabor}
+          projectEntries={projectEntries}
+          hoursEntries={allHours}
+        />
       )}
 
       {page === "Team Chat" && (
