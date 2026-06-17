@@ -80,11 +80,11 @@ Everyone logs their own time on a **My Hours** tab, against a project and an opt
 - **Project budgets and tracking:** each project can carry a budget, with an automatic over / on / under label from budget minus hours times rate, shown to owners
 - **Project Report:** filter by employee, client, project, task, discipline, stage, status, priority, and date range, in Detailed or Consolidated views, exportable to **PDF or Word**; owners get a cost-and-labor report, everyone else gets hours and a status report without the money
 - **Auto-calculated progress:** project progress is the hours-weighted average of its tasks, with a manual override
-- **Bulk actions:** select-all and multi-select on the board and project grid, plus select/recover/delete in Trash and bulk actions in the Archive
+- **Bulk actions:** select-all and multi-select on the board and project grid, plus bulk unarchive and delete in the Archive
 - **Team chat and per-project feeds** with per-message ownership (you can only edit or delete your own posts, enforced by the database)
 - **Quality-of-life:** the app remembers the screen you were on, saves a half-finished task if you close the form, and shows a breadcrumb of where you are
-- **Trash and recovery** for both tasks and projects, so nothing is lost to a misclick
-- **Profiles:** custom avatar colors, nicknames, and password changes
+- **Archive and recovery** for both tasks and projects: set anything aside, bring it back, or delete it permanently from the Archive when you're sure- 
+**Profiles:** custom avatar colors, nicknames, and password changes
 
 ## Built with
 
