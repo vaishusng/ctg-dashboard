@@ -34,13 +34,17 @@ export default function Login() {
 
     if (tab === "signup") {
       if (!name.trim() || !emailNorm || !password) return setError("Please fill out every field.");
-      if (!emailNorm.endsWith(EMPLOYEE_EMAIL_DOMAIN) && !ALLOWED_TEST_EMAILS.includes(emailNorm))
-        return setError(`Sign-ups are restricted to CTG employees — use your ${EMPLOYEE_EMAIL_DOMAIN} email.`);
       if (code.trim() !== EMPLOYEE_CODE) return setError("That employee code isn't valid. Ask Madhavi for the current code.");
       const pwError = passwordCheck(password);
       if (pwError) return setError(pwError);
 
       setBusy(true);
+      // Ask the database whether this email may sign up: a CTG-domain address,
+      // or one the owners approved in the allowed_emails table. This replaces the
+      // old hardcoded list so owners can add outside emails without a code change.
+      const { data: emailOk, error: allowErr } = await supabase.rpc("email_allowed", { check_email: emailNorm });
+      if (allowErr) { setBusy(false); return setError("Couldn't verify that email right now. Please try again in a moment."); }
+      if (!emailOk) { setBusy(false); return setError("That email isn't approved for sign-up yet. Ask Madhavi or Srujan to add it."); }
       const { error: signUpError } = await supabase.auth.signUp({
         email: emailNorm,
         password,
